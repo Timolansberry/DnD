@@ -96,7 +96,7 @@ Do not use the Service Accounts page for this project.
 2. Save the copy as `firebase-config.js`.
 3. Paste the Firebase Web config values into `firebase-config.js`.
 
-This repo already includes a local `firebase-config.js`, and that file is gitignored.
+This project now tracks `firebase-config.js` on purpose so static hosts like GitHub Pages can load the app correctly.
 
 ## How To Enable Email/Password Authentication
 
@@ -209,11 +209,11 @@ The app uses ES modules and browser-based Firebase imports from the official CDN
 2. Open the repository settings.
 3. Enable `Pages`.
 4. Publish from the repository root or the branch/folder you prefer.
-5. Ensure `firebase-config.js` is present in the deployed output for the site build you publish.
+5. Confirm `firebase-config.js` is included in the deployed output.
 
-## Why `firebase-config.js` Being Gitignored Does Not Make Values Invisible After Deployment
+## Why `firebase-config.js` Can Be Committed In This Project
 
-Gitignore only prevents accidental commits. If the file is deployed to a static host, the browser still downloads it. That is normal for Firebase Web config and does not make it an Admin credential.
+This app runs fully in the browser, so the Firebase Web config must be downloadable by the browser at runtime. That is normal for Firebase Web config and does not make it an Admin credential.
 
 ## Why Firebase Web Configuration Is Not An Admin Credential
 
