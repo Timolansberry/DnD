@@ -967,6 +967,12 @@ function renderCharacterTabs() {
 
     const titleRow = createElement("div", { className: "character-tab-name-row" });
     const title = createElement("span", { className: "character-tab-title", text: character.meta.name });
+    const playerName = createElement("span", {
+      className: "character-tab-player",
+      text: getNestedValue(character, "sheet.identity.playerName") || "No player name"
+    });
+    const titleBlock = createElement("div", { className: "character-tab-title-block" });
+    titleBlock.append(title, playerName);
     const editButton = createElement("button", {
       className: "btn btn-ghost btn-small tab-edit-button",
       type: "button",
@@ -976,12 +982,8 @@ function renderCharacterTabs() {
       }
     });
 
-    titleRow.append(title, editButton);
+    titleRow.append(titleBlock, editButton);
     tabButton.appendChild(titleRow);
-
-    if (characterId === state.selectedCharacterId) {
-      tabButton.appendChild(createElement("span", { className: "character-tab-badge", text: "Viewing" }));
-    }
 
     const metaText =
       state.savingTabNameId === characterId
@@ -1010,6 +1012,13 @@ function controlDesiredValue(control, character) {
     return "";
   }
 
+  if (control.dataset.attackCombined) {
+    const rowId = control.dataset.attackCombined;
+    const damage = getNestedValue(character.sheet, `attacks.rows.${rowId}.damage`) || "";
+    const damageType = getNestedValue(character.sheet, `attacks.rows.${rowId}.damageType`) || "";
+    return [damage, damageType].filter(Boolean).join(" ").trim();
+  }
+
   if (control.dataset.calculatedKind === "abilityModifier") {
     return getResolvedAbilityModifier(character, control.dataset.ability);
   }
@@ -1029,6 +1038,23 @@ function controlDesiredValue(control, character) {
   return getNestedValue(character.sheet, fieldPath);
 }
 
+function formatSignedValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return String(value);
+  }
+
+  if (numericValue > 0) {
+    return `+${numericValue}`;
+  }
+
+  return String(numericValue);
+}
+
 function renderFieldControl(control, character) {
   const desiredValue = controlDesiredValue(control, character);
   const isFocused = document.activeElement === control;
@@ -1044,14 +1070,14 @@ function renderFieldControl(control, character) {
 
   if (isFocused) {
     const currentValue = control.value;
-    const desiredComparable = desiredValue ?? "";
+    const desiredComparable = control.dataset.signedNumber ? formatSignedValue(desiredValue) : desiredValue ?? "";
     if (currentValue !== desiredComparable) {
       state.pendingRemoteFields.add(control.dataset.field);
     }
     return;
   }
 
-  control.value = desiredValue ?? "";
+  control.value = control.dataset.signedNumber ? formatSignedValue(desiredValue) : desiredValue ?? "";
 }
 
 function renderAllFields() {
@@ -1097,26 +1123,17 @@ function renderAttacks() {
     row.appendChild(bonusCell);
 
     const damageCell = createElement("td", { className: "attack-damage-cell" });
-    const damageGrid = createElement("div", { className: "attack-damage-grid" });
-    damageGrid.append(
+    damageCell.appendChild(
       createElement("input", {
         type: "text",
         attributes: {
-          "aria-label": `Damage for ${rowId}`,
+          "aria-label": `Damage and type for ${rowId}`,
           "data-field": `attacks.rows.${rowId}.damage`,
-          placeholder: "1d8 + 3"
-        }
-      }),
-      createElement("input", {
-        type: "text",
-        attributes: {
-          "aria-label": `Damage type for ${rowId}`,
-          "data-field": `attacks.rows.${rowId}.damageType`,
-          placeholder: "Piercing"
+          "data-attack-combined": rowId,
+          placeholder: "1d8 + 3 Piercing"
         }
       })
     );
-    damageCell.appendChild(damageGrid);
     row.appendChild(damageCell);
 
     const actionCell = createElement("td", { className: "attack-action-cell" });
@@ -1667,6 +1684,15 @@ function parseControlValue(control) {
     return Boolean(control.checked);
   }
 
+  if (control.dataset.signedNumber) {
+    const trimmedValue = control.value.trim();
+    if (trimmedValue === "") {
+      return null;
+    }
+    const numericValue = Number(trimmedValue);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
   if (control.type === "number") {
     if (control.value === "") {
       return null;
@@ -1681,6 +1707,10 @@ function parseControlValue(control) {
 function normalizeFieldValue(fieldPath, rawValue) {
   if (rawValue === undefined) {
     return null;
+  }
+
+  if (typeof rawValue === "boolean") {
+    return rawValue;
   }
 
   if (fieldPath === "combat.inspiration") {
@@ -1747,6 +1777,22 @@ function handleSheetFieldInteraction(control, mode) {
 
   const character = currentCharacter();
   if (!character) {
+    return;
+  }
+
+  if (control.dataset.attackCombined) {
+    const rowId = control.dataset.attackCombined;
+    const combinedValue = normalizeText(control.value);
+    const damagePath = `sheet/attacks/rows/${rowId}/damage`;
+    const damageTypePath = `sheet/attacks/rows/${rowId}/damageType`;
+    const delay = mode === "change" ? 0 : 600;
+
+    applyRelativeUpdate(state.selectedCharacterId, damagePath, combinedValue);
+    applyRelativeUpdate(state.selectedCharacterId, damageTypePath, "");
+    renderAllFields();
+    renderSaveStatus();
+    scheduleWrite(state.selectedCharacterId, damagePath, combinedValue, delay);
+    scheduleWrite(state.selectedCharacterId, damageTypePath, "", delay);
     return;
   }
 
@@ -2187,13 +2233,14 @@ function buildAbilityCards() {
     modField.appendChild(createElement("label", { text: "Modifier" }));
     modField.appendChild(
       createElement("input", {
-        type: "number",
+        type: "text",
         attributes: {
           "aria-label": `${ability.label} modifier`,
           "data-field": `calculatedOverrides.abilityModifiers.${ability.key}`,
           "data-calculated-kind": "abilityModifier",
           "data-ability": ability.key,
-          inputmode: "numeric"
+          "data-signed-number": "true",
+          inputmode: "text"
         }
       })
     );
@@ -2219,13 +2266,14 @@ function buildSavingThrowsList() {
     const label = createElement("span", { className: "score-list-label", text: ability.label });
     const abbr = createElement("small", { className: "score-list-abbr", text: ability.abbr });
     const modifier = createElement("input", {
-      type: "number",
+      type: "text",
       attributes: {
         "aria-label": `${ability.label} saving throw`,
         "data-field": `calculatedOverrides.savingThrows.${ability.key}`,
         "data-calculated-kind": "savingThrow",
         "data-ability": ability.key,
-        inputmode: "numeric"
+        "data-signed-number": "true",
+        inputmode: "text"
       }
     });
 
@@ -2252,13 +2300,14 @@ function buildSkillsList() {
       createElement("small", { className: "score-list-abbr", text: skill.abbr })
     );
     const modifier = createElement("input", {
-      type: "number",
+      type: "text",
       attributes: {
         "aria-label": `${skill.label} modifier`,
         "data-field": `calculatedOverrides.skills.${skill.key}`,
         "data-calculated-kind": "skillModifier",
         "data-skill": skill.key,
-        inputmode: "numeric"
+        "data-signed-number": "true",
+        inputmode: "text"
       }
     });
 
