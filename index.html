@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adventurers' Archive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Spectral:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-bg" aria-hidden="true"></div>
+
+  <div id="offline-banner" class="top-banner top-banner-offline" role="alert" hidden>
+    Offline mode is active. Local edits will queue and sync when your connection returns.
+  </div>
+  <div id="config-banner" class="top-banner top-banner-warning" role="alert" hidden></div>
+  <div id="permission-banner" class="top-banner top-banner-danger" role="alert" hidden></div>
+
+  <div id="save-status-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="auth-error-live" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  <div id="remote-update-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="dice-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="auth-loading-screen" class="screen-card screen-card-loading">
+    <div class="crest-mark" aria-hidden="true"></div>
+    <p class="eyebrow">Adventurers' Archive</p>
+    <h1>Preparing the archive</h1>
+    <p class="screen-copy">Checking your Firebase session and readying the current campaign cache.</p>
+  </div>
+
+  <main id="auth-screen" class="screen-card auth-card" hidden>
+    <div class="auth-card-art" aria-hidden="true">
+      <svg viewBox="0 0 120 120" class="auth-glyph">
+        <path d="M60 8 23 28v28c0 24 15 45 37 56 22-11 37-32 37-56V28L60 8Z"></path>
+        <path d="M60 31v43"></path>
+        <path d="M44 47h32"></path>
+      </svg>
+    </div>
+    <div class="auth-card-body">
+      <p class="eyebrow">Character Sheets &amp; Dice</p>
+      <h1>Adventurers' Archive</h1>
+      <p class="screen-copy">
+        Sign in with an existing Email/Password account created in Firebase Authentication.
+      </p>
+      <form id="login-form" class="auth-form" novalidate>
+        <label class="field-block">
+          <span>Email</span>
+          <input id="email-input" name="email" type="email" autocomplete="username" required>
+        </label>
+        <label class="field-block">
+          <span>Password</span>
+          <input id="password-input" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p id="login-error" class="auth-error" role="alert" hidden></p>
+        <button id="login-button" class="btn btn-primary btn-wide" type="submit">Sign In</button>
+      </form>
+    </div>
+  </main>
+
+  <div id="dashboard" class="dashboard" hidden>
+    <header class="site-header">
+      <div class="brand-block">
+        <div class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <path d="M32 5 11 16v17c0 14 9 26 21 31 12-5 21-17 21-31V16L32 5Z"></path>
+            <path d="M32 20v24"></path>
+            <path d="M22 30h20"></path>
+          </svg>
+        </div>
+        <div>
+          <p class="eyebrow">Character Sheets &amp; Dice</p>
+          <h1 class="site-title">Adventurers' Archive</h1>
+          <p id="campaign-display" class="site-subtitle">Main Campaign</p>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="user-chip">
+          <span class="chip-label">Signed in as</span>
+          <strong id="user-label">Unknown</strong>
+        </div>
+        <button id="dice-button" class="btn btn-secondary" type="button" aria-haspopup="dialog" aria-controls="dice-modal">
+          Roll Dice
+        </button>
+        <button id="settings-button" class="btn btn-secondary" type="button" aria-haspopup="dialog" aria-controls="settings-modal">
+          Settings
+        </button>
+        <button id="signout-button" class="btn btn-ghost" type="button">Sign Out</button>
+      </div>
+    </header>
+
+    <div class="status-rail">
+      <div class="status-card">
+        <span class="status-label">Sync Status</span>
+        <strong id="save-status-indicator">Syncing...</strong>
+      </div>
+      <div id="remote-update-note" class="status-note" hidden>Updated by another player.</div>
+    </div>
+
+    <main class="workspace">
+      <section class="tab-strip-section">
+        <div class="section-heading">
+          <h2>Party Roster</h2>
+          <p>Choose one of the five fixed records. Switching characters uses the local cache immediately.</p>
+        </div>
+        <div id="character-tablist" class="character-tablist" role="tablist" aria-label="Character selector"></div>
+      </section>
+
+      <section class="tab-strip-section">
+        <div class="section-heading">
+          <h2>Sheet Pages</h2>
+          <p>Core Sheet, Character Details, and Spellcasting all share the same live Firebase-backed form.</p>
+        </div>
+        <div id="page-tablist" class="page-tablist" role="tablist" aria-label="Character sheet pages">
+          <button class="page-tab" type="button" role="tab" data-page-tab="core" aria-selected="true">Core Sheet</button>
+          <button class="page-tab" type="button" role="tab" data-page-tab="details" aria-selected="false" tabindex="-1">Character Details</button>
+          <button class="page-tab" type="button" role="tab" data-page-tab="spellcasting" aria-selected="false" tabindex="-1">Spellcasting</button>
+        </div>
+      </section>
+
+      <section class="sheet-shell">
+        <div class="sheet-shell-header">
+          <div>
+            <p class="eyebrow">Parchment Ledger</p>
+            <h2 id="sheet-title">Current Character</h2>
+          </div>
+          <div class="sheet-shell-meta">
+            <span id="last-updated-label">Waiting for Firebase...</span>
+          </div>
+        </div>
+
+        <form id="sheet-form" class="sheet-form" novalidate>
+          <section class="sheet-page sheet-page-core" data-page-panel="core">
+            <div class="page-banner page-banner-core">
+              <div class="page-banner-art" aria-hidden="true"></div>
+              <div class="identity-banner-layout">
+                <label class="field-block identity-name-field">
+                  <span>Character Name</span>
+                  <input data-field="identity.characterName" type="text" maxlength="80">
+                </label>
+                <div class="sheet-grid identity-grid banner-fields">
+                  <label class="field-block field-combo">
+                    <span>Class &amp; Level</span>
+                    <div class="field-combo-inputs">
+                      <input data-field="identity.class" type="text" maxlength="50">
+                      <input class="level-input" data-field="identity.level" type="number" min="1" max="20" inputmode="numeric">
+                    </div>
+                  </label>
+                  <label class="field-block">
+                    <span>Background</span>
+                    <input data-field="identity.background" type="text" maxlength="50">
+                  </label>
+                  <label class="field-block">
+                    <span>Player Name</span>
+                    <input data-field="identity.playerName" type="text" maxlength="50">
+                  </label>
+                  <label class="field-block">
+                    <span>Race</span>
+                    <input data-field="identity.race" type="text" maxlength="50">
+                  </label>
+                  <label class="field-block">
+                    <span>Alignment</span>
+                    <input data-field="identity.alignment" type="text" maxlength="40">
+                  </label>
+                  <label class="field-block">
+                    <span>Experience Points</span>
+                    <input data-field="identity.experiencePoints" type="number" min="0" inputmode="numeric">
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="core-sheet-layout">
+              <section class="sheet-section core-abilities-section">
+                <div id="abilities-grid" class="abilities-grid"></div>
+              </section>
+
+              <div class="core-sidebar-column">
+                <label class="sheet-section core-inspiration-section strip-field">
+                  <input data-field="combat.inspiration" type="number" min="0" inputmode="numeric">
+                  <span>Inspiration</span>
+                </label>
+
+                <label class="sheet-section core-proficiency-section strip-field">
+                  <input data-field="combat.proficiencyBonus" type="number" min="0" max="20" inputmode="numeric">
+                  <span>Proficiency Bonus</span>
+                </label>
+
+                <section class="sheet-section core-saving-throws-section">
+                  <div class="section-title-row compact-title-row">
+                    <h3>Saving Throws</h3>
+                  </div>
+                  <div id="saving-throws-list" class="score-list"></div>
+                </section>
+
+                <section class="sheet-section core-skills-section">
+                  <div class="section-title-row compact-title-row">
+                    <h3>Skills</h3>
+                  </div>
+                  <div id="skills-list" class="score-list score-list-skills"></div>
+                </section>
+
+                <label class="sheet-section field-block passive-perception-field">
+                  <span>Passive Wisdom (Perception)</span>
+                  <input
+                    data-field="calculatedOverrides.passivePerception"
+                    data-calculated-kind="passivePerception"
+                    type="number"
+                    inputmode="numeric"
+                  >
+                </label>
+
+                <section class="sheet-section core-proficiencies-section">
+                  <label class="field-block">
+                    <span>Other Proficiencies &amp; Languages</span>
+                    <textarea data-field="proficiencies.other" rows="7"></textarea>
+                  </label>
+                </section>
+              </div>
+
+              <div class="core-center-column">
+                <section class="sheet-section core-combat-section">
+                  <div class="combat-layout">
+                    <div class="combat-top-stats">
+                      <label class="field-block combat-badge-field armor-class-field">
+                        <span>Armor Class</span>
+                        <input data-field="combat.armorClass" type="number" inputmode="numeric">
+                      </label>
+                      <label class="field-block combat-badge-field">
+                        <span>Initiative</span>
+                        <input data-field="combat.initiative" type="number" inputmode="numeric">
+                      </label>
+                      <label class="field-block combat-badge-field">
+                        <span>Speed</span>
+                        <input data-field="combat.speed" type="number" min="0" inputmode="numeric">
+                      </label>
+                    </div>
+
+                    <div class="combat-hitpoint-stack">
+                      <label class="field-block combat-hitpoint-maximum">
+                        <span>Hit Point Maximum</span>
+                        <input data-field="combat.hitPointMaximum" type="number" inputmode="numeric">
+                      </label>
+                      <label class="field-block combat-current-hitpoints">
+                        <span>Current Hit Points</span>
+                        <input data-field="combat.currentHitPoints" type="number" inputmode="numeric">
+                      </label>
+                      <label class="field-block combat-temporary-hitpoints">
+                        <span>Temporary Hit Points</span>
+                        <input data-field="combat.temporaryHitPoints" type="number" inputmode="numeric">
+                      </label>
+                    </div>
+
+                    <div class="combat-bottom-grid">
+                      <div class="sheet-section combat-hitdice-card">
+                        <label class="field-block">
+                          <span>Hit Dice Total</span>
+                          <input data-field="combat.hitDiceTotal" type="text" maxlength="30">
+                        </label>
+                        <label class="field-block">
+                          <span>Hit Dice</span>
+                          <input data-field="combat.hitDice" type="text" maxlength="30">
+                        </label>
+                      </div>
+
+                      <div class="sheet-section combat-death-saves-card">
+                        <h3>Death Saves</h3>
+                        <div class="death-saves-grid">
+                          <label class="field-block">
+                            <span>Successes</span>
+                            <input data-field="combat.deathSaveSuccesses" type="number" min="0" max="3" inputmode="numeric">
+                          </label>
+                          <label class="field-block">
+                            <span>Failures</span>
+                            <input data-field="combat.deathSaveFailures" type="number" min="0" max="3" inputmode="numeric">
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="sheet-section core-attacks-section">
+                  <div class="section-title-row compact-title-row">
+                    <h3>Attacks &amp; Spellcasting</h3>
+                    <button id="add-attack-button" class="btn btn-secondary btn-small" type="button">Add Attack</button>
+                  </div>
+                  <div class="table-scroll">
+                    <table class="detail-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Name</th>
+                          <th scope="col">Attack Bonus</th>
+                          <th scope="col">Damage</th>
+                          <th scope="col">Damage Type</th>
+                          <th scope="col">Notes</th>
+                          <th scope="col">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody id="attacks-body"></tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="sheet-section core-equipment-section">
+                  <div class="section-title-row compact-title-row">
+                    <h3>Equipment</h3>
+                  </div>
+                  <div class="sheet-grid currency-grid">
+                    <label class="field-block">
+                      <span>Copper Pieces</span>
+                      <input data-field="equipment.currency.cp" type="number" min="0" inputmode="numeric">
+                    </label>
+                    <label class="field-block">
+                      <span>Silver Pieces</span>
+                      <input data-field="equipment.currency.sp" type="number" min="0" inputmode="numeric">
+                    </label>
+                    <label class="field-block">
+                      <span>Electrum Pieces</span>
+                      <input data-field="equipment.currency.ep" type="number" min="0" inputmode="numeric">
+                    </label>
+                    <label class="field-block">
+                      <span>Gold Pieces</span>
+                      <input data-field="equipment.currency.gp" type="number" min="0" inputmode="numeric">
+                    </label>
+                    <label class="field-block">
+                      <span>Platinum Pieces</span>
+                      <input data-field="equipment.currency.pp" type="number" min="0" inputmode="numeric">
+                    </label>
+                  </div>
+                  <label class="field-block equipment-textarea">
+                    <span>Equipment</span>
+                    <textarea data-field="equipment.items" rows="9"></textarea>
+                  </label>
+                </section>
+              </div>
+
+              <div class="core-right-column">
+                <section class="sheet-section core-personality-section">
+                  <div class="personality-stack">
+                    <label class="field-block">
+                      <span>Personality Traits</span>
+                      <textarea data-field="personality.traits" rows="3"></textarea>
+                    </label>
+                    <label class="field-block">
+                      <span>Ideals</span>
+                      <textarea data-field="personality.ideals" rows="3"></textarea>
+                    </label>
+                    <label class="field-block">
+                      <span>Bonds</span>
+                      <textarea data-field="personality.bonds" rows="3"></textarea>
+                    </label>
+                    <label class="field-block">
+                      <span>Flaws</span>
+                      <textarea data-field="personality.flaws" rows="3"></textarea>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="sheet-section core-features-section">
+                  <label class="field-block">
+                    <span>Features &amp; Traits</span>
+                    <textarea data-field="features.featuresAndTraits" rows="18"></textarea>
+                  </label>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <section class="sheet-page sheet-page-details" data-page-panel="details">
+            <div class="page-banner page-banner-details">
+              <div class="page-banner-art" aria-hidden="true"></div>
+              <div class="details-banner-layout">
+                <label class="field-block details-name-field">
+                  <span>Character Name</span>
+                  <input data-field="identity.characterName" type="text" maxlength="80">
+                </label>
+                <div class="sheet-grid details-grid details-stats-grid">
+                  <label class="field-block">
+                    <span>Age</span>
+                    <input data-field="appearance.age" type="text" maxlength="30">
+                  </label>
+                  <label class="field-block">
+                    <span>Height</span>
+                    <input data-field="appearance.height" type="text" maxlength="30">
+                  </label>
+                  <label class="field-block">
+                    <span>Weight</span>
+                    <input data-field="appearance.weight" type="text" maxlength="30">
+                  </label>
+                  <label class="field-block">
+                    <span>Eyes</span>
+                    <input data-field="appearance.eyes" type="text" maxlength="30">
+                  </label>
+                  <label class="field-block">
+                    <span>Skin</span>
+                    <input data-field="appearance.skin" type="text" maxlength="30">
+                  </label>
+                  <label class="field-block">
+                    <span>Hair</span>
+                    <input data-field="appearance.hair" type="text" maxlength="30">
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="details-sheet-layout">
+              <section class="sheet-section details-appearance-section">
+                <label class="field-block">
+                  <span>Character Appearance</span>
+                  <textarea data-field="appearance.characterAppearance" rows="16"></textarea>
+                </label>
+              </section>
+
+              <section class="sheet-section details-allies-section">
+                <div class="details-allies-layout">
+                  <label class="field-block">
+                    <span>Allies and Organizations</span>
+                    <textarea data-field="organizations.alliesAndOrganizations" rows="14"></textarea>
+                  </label>
+                  <div class="details-symbol-card">
+                    <label class="field-block">
+                      <span>Organization Name</span>
+                      <input data-field="organizations.organizationName" type="text" maxlength="60">
+                    </label>
+                    <label class="field-block">
+                      <span>Organization Symbol Description</span>
+                      <textarea data-field="organizations.organizationSymbolDescription" rows="10"></textarea>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="sheet-section details-backstory-section">
+                <label class="field-block">
+                  <span>Character Backstory</span>
+                  <textarea data-field="backstory.characterBackstory" rows="10"></textarea>
+                </label>
+              </section>
+
+              <section class="sheet-section details-treasure-section">
+                <label class="field-block details-treasure-main">
+                  <span>Treasure</span>
+                  <textarea data-field="treasure.treasure" rows="9"></textarea>
+                </label>
+                <div class="details-treasure-footer">
+                  <label class="field-block">
+                    <span>Additional Features and Traits</span>
+                    <textarea data-field="features.additionalFeaturesAndTraits" rows="4"></textarea>
+                  </label>
+                  <label class="field-block">
+                    <span>Notes</span>
+                    <textarea data-field="backstory.notes" rows="4"></textarea>
+                  </label>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="sheet-page sheet-page-spellcasting" data-page-panel="spellcasting">
+            <div class="page-banner page-banner-spell">
+              <div class="page-banner-art" aria-hidden="true"></div>
+              <div class="spell-banner-layout">
+                <label class="field-block spellcasting-class-field">
+                  <span>Spellcasting Class</span>
+                  <input data-field="spellcasting.spellcastingClass" type="text" maxlength="50">
+                </label>
+                <div class="sheet-grid spell-overview-grid spell-banner-stats">
+                  <label class="field-block">
+                    <span>Spellcasting Ability</span>
+                    <input data-field="spellcasting.spellcastingAbility" type="text" maxlength="20">
+                  </label>
+                  <label class="field-block">
+                    <span>Spell Save DC</span>
+                    <input data-field="spellcasting.spellSaveDC" type="number" inputmode="numeric">
+                  </label>
+                  <label class="field-block">
+                    <span>Spell Attack Bonus</span>
+                    <input data-field="spellcasting.spellAttackBonus" type="number" inputmode="numeric">
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div id="spell-sections" class="spell-columns-layout"></div>
+          </section>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <div id="dice-modal" class="modal-shell" hidden>
+    <div class="modal-backdrop" data-close-modal="dice"></div>
+    <section class="modal-panel dice-panel" role="dialog" aria-modal="true" aria-labelledby="dice-modal-title">
+      <header class="modal-header">
+        <div>
+          <p class="eyebrow">Arcane Utility</p>
+          <h2 id="dice-modal-title">Dice Roller</h2>
+        </div>
+        <button id="dice-close-button" class="btn btn-icon" type="button" aria-label="Close dice roller">Close</button>
+      </header>
+      <div class="modal-body">
+        <div id="dice-type-group" class="dice-type-group" role="radiogroup" aria-label="Die selection"></div>
+        <div class="sheet-grid dice-grid">
+          <label class="field-block">
+            <span>Number of Dice</span>
+            <input id="dice-count" type="number" min="1" max="10" inputmode="numeric">
+          </label>
+          <label class="field-block">
+            <span>Modifier</span>
+            <input id="dice-modifier" type="number" min="-99" max="99" inputmode="numeric">
+          </label>
+        </div>
+        <button id="roll-button" class="btn btn-primary btn-wide" type="button">Roll</button>
+        <section id="dice-result-card" class="dice-result-card" aria-live="polite" aria-atomic="true">
+          <p id="dice-formula" class="dice-formula">Choose your roll.</p>
+          <p id="dice-breakdown" class="dice-breakdown">Results will appear here.</p>
+          <p id="dice-total" class="dice-total">-</p>
+        </section>
+        <section class="history-section">
+          <div class="history-header">
+            <h3>Recent Rolls</h3>
+            <button id="clear-history-button" class="btn btn-ghost btn-small" type="button">Clear History</button>
+          </div>
+          <ol id="dice-history" class="history-list"></ol>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div id="settings-modal" class="modal-shell" hidden>
+    <div class="modal-backdrop" data-close-modal="settings"></div>
+    <section class="modal-panel settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+      <header class="modal-header">
+        <div>
+          <p class="eyebrow">Campaign Tools</p>
+          <h2 id="settings-modal-title">Settings</h2>
+        </div>
+        <button id="settings-close-button" class="btn btn-icon" type="button" aria-label="Close settings">Close</button>
+      </header>
+      <form id="settings-form" class="modal-body settings-form" novalidate>
+        <label class="field-block">
+          <span>Campaign Display Name</span>
+          <input id="campaign-name-input" type="text" maxlength="60">
+        </label>
+        <label class="field-check field-check-panel">
+          <input id="manual-calculations-toggle" type="checkbox">
+          <span>Manual calculations for the current character</span>
+        </label>
+        <div class="settings-actions-grid">
+          <button id="export-current-button" class="btn btn-secondary" type="button">Export Current Character</button>
+          <button id="export-all-button" class="btn btn-secondary" type="button">Export All Characters</button>
+          <button id="import-character-button" class="btn btn-secondary" type="button">Import Current Character</button>
+          <button id="print-sheet-button" class="btn btn-secondary" type="button">Print Current Sheet</button>
+          <button id="reset-cache-button" class="btn btn-danger" type="button">Reset Local Cache</button>
+        </div>
+        <p class="settings-note">
+          Export and import files only contain character data. Authentication details and Firebase configuration are never included.
+        </p>
+        <div class="modal-footer">
+          <button class="btn btn-primary" type="submit">Save Settings</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <input id="import-file-input" type="file" accept="application/json" hidden>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
