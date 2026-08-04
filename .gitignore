@@ -1,0 +1,8 @@
+firebase-config.js
+serviceAccountKey.json
+*service-account*.json
+.env
+.env.*
+node_modules/
+.DS_Store
+tmp/

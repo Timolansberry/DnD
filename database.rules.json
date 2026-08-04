@@ -1,0 +1,89 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "campaigns": {
+      "main-campaign": {
+        ".read": "auth != null && (auth.uid === 'REPLACE_WITH_UID_1' || auth.uid === 'REPLACE_WITH_UID_2')",
+        ".write": "auth != null && (auth.uid === 'REPLACE_WITH_UID_1' || auth.uid === 'REPLACE_WITH_UID_2')",
+        "characters": {
+          "$characterId": {
+            ".validate": "$characterId === 'character-1' || $characterId === 'character-2' || $characterId === 'character-3' || $characterId === 'character-4' || $characterId === 'character-5'",
+            "meta": {
+              "name": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 30"
+              },
+              "order": {
+                ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5"
+              },
+              "updatedAt": {
+                ".validate": "newData.isNumber() || newData.val() == now"
+              },
+              "updatedBy": {
+                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 120"
+              }
+            },
+            "sheet": {
+              "settings": {
+                "manualCalculations": {
+                  ".validate": "newData.isBoolean()"
+                }
+              },
+              "identity": {
+                "characterName": {
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
+                },
+                "level": {
+                  ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 20)"
+                },
+                "experiencePoints": {
+                  ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+                }
+              },
+              "abilities": {
+                "$ability": {
+                  "score": {
+                    ".validate": "($ability === 'strength' || $ability === 'dexterity' || $ability === 'constitution' || $ability === 'intelligence' || $ability === 'wisdom' || $ability === 'charisma') && (!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 30))"
+                  }
+                }
+              },
+              "savingThrows": {
+                "$ability": {
+                  "proficient": {
+                    ".validate": "($ability === 'strength' || $ability === 'dexterity' || $ability === 'constitution' || $ability === 'intelligence' || $ability === 'wisdom' || $ability === 'charisma') && newData.isBoolean()"
+                  }
+                }
+              },
+              "skills": {
+                "$skill": {
+                  "proficient": {
+                    ".validate": "newData.isBoolean()"
+                  },
+                  "expertise": {
+                    ".validate": "newData.isBoolean()"
+                  }
+                }
+              },
+              "combat": {
+                "proficiencyBonus": {
+                  ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 20)"
+                },
+                "deathSaveSuccesses": {
+                  ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 3)"
+                },
+                "deathSaveFailures": {
+                  ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 3)"
+                }
+              },
+              "calculatedOverrides": {
+                "passivePerception": {
+                  ".validate": "!newData.exists() || newData.isNumber()"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
