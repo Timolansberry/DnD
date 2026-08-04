@@ -928,6 +928,7 @@ function renderCharacterTabs() {
 
   CHARACTER_IDS.forEach((characterId, index) => {
     const character = state.characters[characterId] || createDefaultCharacter(characterId, index);
+    const currentName = character.meta.name;
     const wrapper = createElement("div", {
       className: `character-card${characterId === state.selectedCharacterId ? " is-selected" : ""}`
     });
@@ -1071,45 +1072,62 @@ function renderAttacks() {
 
   Object.entries(rows).forEach(([rowId]) => {
     const row = createElement("tr");
-    const fieldMappings = [
-      { key: "name", type: "text", label: "Attack name" },
-      { key: "attackBonus", type: "text", label: "Attack bonus" },
-      { key: "damage", type: "text", label: "Damage" },
-      { key: "damageType", type: "text", label: "Damage type" },
-      { key: "notes", tag: "textarea", rows: 2, label: "Attack notes" }
-    ];
+    const nameCell = createElement("td");
+    nameCell.appendChild(
+      createElement("input", {
+        type: "text",
+        attributes: {
+          "aria-label": `Attack name for ${rowId}`,
+          "data-field": `attacks.rows.${rowId}.name`
+        }
+      })
+    );
+    row.appendChild(nameCell);
 
-    fieldMappings.forEach((field) => {
-      const cell = createElement("td");
-      const path = `attacks.rows.${rowId}.${field.key}`;
-      const input =
-        field.tag === "textarea"
-          ? createElement("textarea", {
-              attributes: {
-                "aria-label": `${field.label} for ${rowId}`,
-                "data-field": path,
-                rows: field.rows
-              }
-            })
-          : createElement("input", {
-              type: field.type,
-              attributes: {
-                "aria-label": `${field.label} for ${rowId}`,
-                "data-field": path
-              }
-            });
+    const bonusCell = createElement("td");
+    bonusCell.appendChild(
+      createElement("input", {
+        type: "text",
+        attributes: {
+          "aria-label": `Attack bonus for ${rowId}`,
+          "data-field": `attacks.rows.${rowId}.attackBonus`
+        }
+      })
+    );
+    row.appendChild(bonusCell);
 
-      cell.appendChild(input);
-      row.appendChild(cell);
-    });
+    const damageCell = createElement("td", { className: "attack-damage-cell" });
+    const damageGrid = createElement("div", { className: "attack-damage-grid" });
+    damageGrid.append(
+      createElement("input", {
+        type: "text",
+        attributes: {
+          "aria-label": `Damage for ${rowId}`,
+          "data-field": `attacks.rows.${rowId}.damage`,
+          placeholder: "1d8 + 3"
+        }
+      }),
+      createElement("input", {
+        type: "text",
+        attributes: {
+          "aria-label": `Damage type for ${rowId}`,
+          "data-field": `attacks.rows.${rowId}.damageType`,
+          placeholder: "Piercing"
+        }
+      })
+    );
+    damageCell.appendChild(damageGrid);
+    row.appendChild(damageCell);
 
-    const actionCell = createElement("td");
+    const actionCell = createElement("td", { className: "attack-action-cell" });
     actionCell.appendChild(
       createElement("button", {
-        className: "btn btn-danger btn-small",
+        className: "btn btn-danger btn-small icon-action-button",
         type: "button",
-        text: "Delete",
+        text: "🗑",
         attributes: {
+          "aria-label": `Delete attack ${rowId}`,
+          title: "Delete attack",
           "data-delete-attack": rowId
         }
       })
