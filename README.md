@@ -215,6 +215,8 @@ The app uses ES modules and browser-based Firebase imports from the official CDN
 
 This app runs fully in the browser, so the Firebase Web config must be downloadable by the browser at runtime. That is normal for Firebase Web config and does not make it an Admin credential.
 
+The Firebase Web API key should still be restricted in Google Cloud Console. Limit it to the production site origins, such as `https://timothylansberry.com/*`, and the Firebase APIs used by this app. If GitHub reports that an older commit exposed a Google API key, rotate the key in Firebase/Google Cloud and replace the local fragments in `firebase-config.js`.
+
 ## Why Firebase Web Configuration Is Not An Admin Credential
 
 Firebase Web config identifies the client app. It does not grant privileged server access by itself. Data protection comes from:

@@ -1400,38 +1400,42 @@ input[readonly] {
 .spell-columns-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.72rem;
+  gap: 0.85rem;
   align-items: start;
 }
 
 .spell-column {
   display: grid;
-  gap: 0.72rem;
+  gap: 0.85rem;
 }
 
 .spell-section {
-  padding: 0.68rem;
-  background: rgba(255, 251, 243, 0.88);
+  padding: 0.8rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(236, 246, 255, 0.94));
+  border-color: rgba(125, 211, 252, 0.24);
+  box-shadow: 0 16px 34px rgba(14, 165, 233, 0.08);
 }
 
 .spell-section-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 0.55rem;
+  gap: 0.5rem;
   align-items: center;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.6rem;
 }
 
 .spell-level-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.9rem;
-  height: 1.9rem;
+  min-width: 2rem;
+  height: 2rem;
   padding: 0.2rem;
-  border: 2px solid rgba(79, 63, 48, 0.78);
-  border-radius: 8px 14px 14px 8px;
-  background: linear-gradient(180deg, rgba(251, 249, 242, 0.98), rgba(228, 219, 193, 0.96));
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.16), rgba(249, 115, 22, 0.1));
+  color: var(--ink);
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 700;
@@ -1439,37 +1443,83 @@ input[readonly] {
 
 .spell-level-title {
   margin: 0;
-  padding: 0.4rem 0.7rem;
-  border: 2px solid rgba(79, 63, 48, 0.78);
-  border-radius: 999px 12px 12px 999px;
-  background: linear-gradient(180deg, rgba(251, 249, 242, 0.98), rgba(228, 219, 193, 0.96));
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.05rem;
+  color: var(--ink);
+  line-height: 1.1;
 }
 
 .spell-add-button {
   justify-self: end;
+  min-height: 2.05rem;
+  padding: 0.34rem 0.7rem;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(148, 163, 184, 0.28);
 }
 
 .spell-meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-  margin-bottom: 0.55rem;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
 }
 
 .spell-table {
   font-size: 0.72rem;
   table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
-.spell-table th:nth-child(1) { width: 12%; }
-.spell-table th:nth-child(2) { width: 42%; }
-.spell-table th:nth-child(3) { width: 31%; }
-.spell-table th:nth-child(4) { width: 15%; }
+.spell-table th {
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.spell-table th,
+.spell-table td {
+  padding: 0.34rem 0.24rem;
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+.spell-table th:nth-child(1) { width: 13%; }
+.spell-table th:nth-child(2) { width: 39%; }
+.spell-table th:nth-child(3) { width: 37%; }
+.spell-table th:nth-child(4) { width: 11%; }
+
+.spell-table td input,
+.spell-table td textarea {
+  padding: 0.48rem 0.5rem;
+  border-radius: 10px;
+}
+
+.spell-table td input[type="checkbox"] {
+  width: 0.95rem;
+  min-width: 0;
+  height: 0.95rem;
+  margin: 0.55rem auto 0;
+  display: block;
+}
 
 .spell-table textarea {
-  min-height: 2.2rem;
+  min-height: 2.28rem;
+  resize: vertical;
+}
+
+.spell-action-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.spell-delete-button {
+  background: linear-gradient(135deg, #e85d75, #c2415b);
 }
 
 .settings-actions-grid {

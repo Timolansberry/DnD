@@ -1213,7 +1213,7 @@ function renderSpellSections() {
       const table = createElement("table", { className: "spell-table" });
       const thead = createElement("thead");
       const headRow = createElement("tr");
-      ["Prep", "Spell Name", "Notes", "Drop"].forEach((label) => {
+      ["Prep", "Spell", "Notes", "Action"].forEach((label) => {
         headRow.appendChild(createElement("th", { text: label }));
       });
       thead.appendChild(headRow);
@@ -1260,13 +1260,14 @@ function renderSpellSections() {
         );
         row.appendChild(notesCell);
 
-        const actionCell = createElement("td");
+        const actionCell = createElement("td", { className: "spell-action-cell" });
         actionCell.appendChild(
           createElement("button", {
-            className: "btn btn-danger btn-small",
+            className: "btn btn-danger btn-small icon-action-button spell-delete-button",
             type: "button",
             text: "X",
             attributes: {
+              title: "Delete spell",
               "aria-label": `Delete ${level.label} ${rowId}`,
               "data-delete-spell": `${level.key}:${rowId}`
             }

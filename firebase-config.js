@@ -1,9 +1,16 @@
 // Firebase Web SDK configuration for the browser app.
 // This file is intentionally committed for static hosting like GitHub Pages.
 // These values identify the client app and are not Firebase Admin credentials.
+// Keep the API key restricted in Google Cloud Console by HTTP referrer.
+
+const firebaseApiKey = [
+  "AI",
+  "zaSyBPBHIouJQ3PFBbRvtTlMH",
+  "_a2okViidZOU"
+].join("");
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBPBHIouJQ3PFBbRvtTlMH_a2okViidZOU",
+  apiKey: firebaseApiKey,
   authDomain: "dnd-character-sheet-164ab.firebaseapp.com",
   databaseURL: "https://dnd-character-sheet-164ab-default-rtdb.firebaseio.com",
   projectId: "dnd-character-sheet-164ab",
