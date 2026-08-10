@@ -6,7 +6,7 @@
   <title>Adventurers' Archive</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -77,6 +77,11 @@
       </div>
 
       <div class="header-controls">
+        <div class="status-card header-status-card">
+          <span class="sync-dot" aria-hidden="true"></span>
+          <span class="status-label">Sync</span>
+          <strong id="save-status-indicator">Syncing...</strong>
+        </div>
         <div class="user-chip">
           <span class="chip-label">Signed in as</span>
           <strong id="user-label">Unknown</strong>
@@ -92,26 +97,25 @@
     </header>
 
     <div class="status-rail">
-      <div class="status-card">
-        <span class="status-label">Sync Status</span>
-        <strong id="save-status-indicator">Syncing...</strong>
+      <div id="remote-update-note" class="status-note" hidden>
+        <span id="remote-update-message">Updated by another player.</span>
+        <button id="undo-action-button" class="status-note-action" type="button" hidden>Undo</button>
       </div>
-      <div id="remote-update-note" class="status-note" hidden>Updated by another player.</div>
     </div>
 
     <main class="workspace">
-      <section class="tab-strip-section">
+      <section class="tab-strip-section roster-section">
         <div class="section-heading">
           <h2>Party Roster</h2>
-          <p>Choose one of the five fixed records. Switching characters uses the local cache immediately.</p>
+          <p>Choose your adventurer</p>
         </div>
         <div id="character-tablist" class="character-tablist" role="tablist" aria-label="Character selector"></div>
       </section>
 
-      <section class="tab-strip-section">
-        <div class="section-heading">
-          <h2>Sheet Pages</h2>
-          <p>Core Sheet, Character Details, and Spellcasting all share the same live Firebase-backed form.</p>
+      <section class="tab-strip-section sheet-navigation-section">
+        <div class="sheet-navigation-copy">
+          <span class="eyebrow">Character Sheet</span>
+          <strong>Jump to section</strong>
         </div>
         <div id="page-tablist" class="page-tablist" role="tablist" aria-label="Character sheet pages">
           <button class="page-tab" type="button" role="tab" data-page-tab="core" aria-selected="true">Core Sheet</button>
@@ -206,7 +210,6 @@
                   <span>Passive Wisdom (Perception)</span>
                   <input
                     data-field="calculatedOverrides.passivePerception"
-                    data-calculated-kind="passivePerception"
                     type="number"
                     inputmode="numeric"
                   >
@@ -241,11 +244,12 @@
                     <div class="combat-hitpoint-stack">
                       <label class="field-block combat-hitpoint-maximum">
                         <span>Hit Point Maximum</span>
-                        <input data-field="combat.hitPointMaximum" type="number" inputmode="numeric">
+                        <input id="hit-point-maximum" data-field="combat.hitPointMaximum" type="number" inputmode="numeric">
                       </label>
                       <label class="field-block combat-current-hitpoints">
                         <span>Current Hit Points</span>
-                        <input data-field="combat.currentHitPoints" type="number" inputmode="numeric">
+                        <input id="current-hit-points" data-field="combat.currentHitPoints" type="number" inputmode="numeric">
+                        <span class="hp-meter" aria-hidden="true"><span id="hp-meter-fill"></span></span>
                       </label>
                       <label class="field-block combat-temporary-hitpoints">
                         <span>Temporary Hit Points</span>
@@ -268,14 +272,24 @@
                       <div class="sheet-section combat-death-saves-card">
                         <h3>Death Saves</h3>
                         <div class="death-saves-grid">
-                          <label class="field-block">
+                          <div class="death-save-control" data-death-save-group="combat.deathSaveSuccesses">
                             <span>Successes</span>
-                            <input data-field="combat.deathSaveSuccesses" type="number" min="0" max="3" inputmode="numeric">
-                          </label>
-                          <label class="field-block">
+                            <input class="death-save-value" data-field="combat.deathSaveSuccesses" type="number" min="0" max="3" inputmode="numeric" tabindex="-1" aria-hidden="true">
+                            <div class="death-save-pips" role="group" aria-label="Death save successes">
+                              <button type="button" data-death-save-value="1" aria-label="One success"></button>
+                              <button type="button" data-death-save-value="2" aria-label="Two successes"></button>
+                              <button type="button" data-death-save-value="3" aria-label="Three successes"></button>
+                            </div>
+                          </div>
+                          <div class="death-save-control death-save-control-failure" data-death-save-group="combat.deathSaveFailures">
                             <span>Failures</span>
-                            <input data-field="combat.deathSaveFailures" type="number" min="0" max="3" inputmode="numeric">
-                          </label>
+                            <input class="death-save-value" data-field="combat.deathSaveFailures" type="number" min="0" max="3" inputmode="numeric" tabindex="-1" aria-hidden="true">
+                            <div class="death-save-pips" role="group" aria-label="Death save failures">
+                              <button type="button" data-death-save-value="1" aria-label="One failure"></button>
+                              <button type="button" data-death-save-value="2" aria-label="Two failures"></button>
+                              <button type="button" data-death-save-value="3" aria-label="Three failures"></button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -499,23 +513,40 @@
         <button id="dice-close-button" class="btn btn-icon" type="button" aria-label="Close dice roller">Close</button>
       </header>
       <div class="modal-body">
-        <div id="dice-type-group" class="dice-type-group" role="radiogroup" aria-label="Die selection"></div>
-        <div class="sheet-grid dice-grid">
-          <label class="field-block">
-            <span>Number of Dice</span>
-            <input id="dice-count" type="number" min="1" max="10" inputmode="numeric">
-          </label>
-          <label class="field-block">
-            <span>Modifier</span>
-            <input id="dice-modifier" type="number" min="-99" max="99" inputmode="numeric">
-          </label>
-        </div>
-        <button id="roll-button" class="btn btn-primary btn-wide" type="button">Roll</button>
-        <section id="dice-result-card" class="dice-result-card" aria-live="polite" aria-atomic="true">
-          <p id="dice-formula" class="dice-formula">Choose your roll.</p>
-          <p id="dice-breakdown" class="dice-breakdown">Results will appear here.</p>
-          <p id="dice-total" class="dice-total">-</p>
+        <section id="dice-result-card" class="dice-stage" aria-live="polite" aria-atomic="true">
+          <div class="dice-stage-header">
+            <div>
+              <span class="dice-stage-kicker">Current Roll</span>
+              <p id="dice-formula" class="dice-formula">Choose dice below to begin.</p>
+            </div>
+            <div class="dice-total-block">
+              <span>Total</span>
+              <strong id="dice-total" class="dice-total">-</strong>
+            </div>
+          </div>
+          <div id="dice-tray" class="dice-tray" aria-label="Dice currently in the tray"></div>
+          <p id="dice-breakdown" class="dice-breakdown">Each die will appear here with its result.</p>
         </section>
+
+        <section class="dice-control-deck" aria-labelledby="dice-palette-title">
+          <div class="dice-control-heading">
+            <div>
+              <span class="dice-stage-kicker">Build Your Roll</span>
+              <h3 id="dice-palette-title">Add dice to the tray</h3>
+            </div>
+            <p>Click a die more than once to add multiples.</p>
+          </div>
+          <div id="dice-type-group" class="dice-type-group" role="group" aria-label="Add dice"></div>
+          <div class="dice-action-row">
+            <label class="field-block dice-modifier-field">
+              <span>Modifier</span>
+              <input id="dice-modifier" type="number" min="-99" max="99" inputmode="numeric">
+            </label>
+            <button id="roll-button" class="btn btn-primary dice-roll-button" type="button">Roll All Dice</button>
+            <button id="clear-dice-button" class="btn btn-ghost dice-clear-button" type="button">Clear Tray</button>
+          </div>
+        </section>
+
         <section class="history-section">
           <div class="history-header">
             <h3>Recent Rolls</h3>
@@ -541,10 +572,6 @@
         <label class="field-block">
           <span>Campaign Display Name</span>
           <input id="campaign-name-input" type="text" maxlength="60">
-        </label>
-        <label class="field-check field-check-panel">
-          <input id="manual-calculations-toggle" type="checkbox">
-          <span>Manual calculations for the current character</span>
         </label>
         <div class="settings-actions-grid">
           <button id="export-current-button" class="btn btn-secondary" type="button">Export Current Character</button>

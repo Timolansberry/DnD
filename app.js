@@ -20,6 +20,17 @@ const DEFAULT_CHARACTER_NAMES = ["Rogue", "Character 2", "Character 3", "Charact
 const CHARACTER_IDS = ["character-1", "character-2", "character-3", "character-4", "character-5"];
 const PAGE_IDS = ["core", "details", "spellcasting"];
 const DICE_TYPES = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
+const DICE_ICON_PATHS = {
+  d4: ["M50 8 90 84H10Z", "M50 8v76M10 84l40-40 40 40"],
+  d6: ["M50 7 88 29v43L50 94 12 72V29Z", "M12 29l38 22 38-22M50 51v43"],
+  d8: ["M50 6 90 50 50 94 10 50Z", "M50 6v88M10 50l40-17 40 17M10 50l40 17 40-17"],
+  d10: ["M50 5 89 42 76 80 50 95 24 80 11 42Z", "M50 5 64 42 50 95 36 42ZM11 42h78M24 80l12-38M76 80 64 42"],
+  d12: ["M50 5 79 16 95 43 89 74 65 94H35L11 74 5 43 21 16Z", "M50 24 72 40 64 66H36L28 40Z", "M50 5v19M79 16 72 40M95 43 64 66M89 74 64 66M65 94 64 66M35 94 36 66M11 74 36 66M5 43 28 40M21 16 28 40"],
+  d20: ["M50 4 86 23 94 62 70 91H30L6 62 14 23Z", "M50 4 70 38 86 23M50 4 30 38 14 23M6 62l24-24h40l24 24M6 62l42-8-18 37M94 62l-42-8 18 37M30 38l18 16-18 37M70 38 52 54l18 37"],
+  d100: ["M50 5 79 14 96 38 92 68 70 92H30L8 68 4 38 21 14Z", "M21 14 31 38 8 68M79 14 69 38 92 68M31 38h38L50 5ZM31 38 30 92l20-25 20 25-1-54M8 68l42-1 42 1"]
+};
+const LOCAL_PREVIEW_MODE = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  && new URLSearchParams(window.location.search).get("preview") === "1";
 const STORAGE_KEYS = {
   activePage: "adventurers-archive-active-page",
   cachedCharacters: "adventurers-archive-character-cache",
@@ -71,12 +82,6 @@ const SPELL_LEVELS = [
   { key: "level7", label: "Level 7", slotBased: true, defaultRows: 4 },
   { key: "level8", label: "Level 8", slotBased: true, defaultRows: 4 },
   { key: "level9", label: "Level 9", slotBased: true, defaultRows: 4 }
-];
-
-const SPELL_COLUMN_GROUPS = [
-  ["cantrips", "level1", "level2"],
-  ["level3", "level4", "level5"],
-  ["level6", "level7", "level8", "level9"]
 ];
 
 const SPELL_LEVEL_BADGES = {
@@ -331,9 +336,7 @@ function buildDefaultSpellcasting() {
 
 function buildDefaultSheet(defaultName) {
   return {
-    settings: {
-      manualCalculations: false
-    },
+    settings: {},
     identity: {
       characterName: defaultName,
       class: "",
@@ -479,9 +482,6 @@ function normalizeCharacter(rawCharacter, characterId, index) {
     const skillEntry = merged.sheet.skills[skill.key];
     skillEntry.proficient = Boolean(skillEntry.proficient);
     skillEntry.expertise = Boolean(skillEntry.expertise);
-    if (skillEntry.expertise) {
-      skillEntry.proficient = true;
-    }
   });
 
   if (merged.sheet.combat.inspiration === true) {
@@ -496,7 +496,6 @@ function normalizeCharacter(rawCharacter, characterId, index) {
     merged.sheet.combat.inspiration = clampNumber(merged.sheet.combat.inspiration, 0, 99, null);
   }
   merged.sheet.combat.proficiencyBonus = clampNumber(merged.sheet.combat.proficiencyBonus, 0, 20, 2);
-  merged.sheet.settings.manualCalculations = Boolean(merged.sheet.settings.manualCalculations);
 
   merged.sheet.attacks.rows = normalizeRows(merged.sheet.attacks.rows, 6, createBlankAttackRow, "attack");
 
@@ -548,10 +547,6 @@ function generateStableId(prefix) {
   return `${prefix}-${Date.now()}-${randomValues[0].toString(16)}${randomValues[1].toString(16)}`;
 }
 
-function abilityModifierFromScore(score) {
-  return Math.floor((Number(score) - 10) / 2);
-}
-
 function currentUserStamp() {
   if (!state.currentUser) {
     return "unknown-user";
@@ -560,72 +555,11 @@ function currentUserStamp() {
   return state.currentUser.email || state.currentUser.uid;
 }
 
-function isManualCalculationsEnabled(character) {
-  return Boolean(getNestedValue(character, "sheet.settings.manualCalculations"));
-}
-
-function getCombatProficiencyBonus(character) {
-  return clampNumber(getNestedValue(character, "sheet.combat.proficiencyBonus"), 0, 20, 0);
-}
-
-function getResolvedAbilityModifier(character, abilityKey) {
-  const overridePath = `sheet.calculatedOverrides.abilityModifiers.${abilityKey}`;
-  const overrideValue = getNestedValue(character, overridePath);
-
-  if (overrideValue !== null && overrideValue !== undefined && overrideValue !== "") {
-    return Number(overrideValue);
-  }
-
-  const score = getNestedValue(character, `sheet.abilities.${abilityKey}.score`);
-  return abilityModifierFromScore(clampNumber(score, 1, 30, 10));
-}
-
-function getResolvedSavingThrow(character, abilityKey) {
-  const overrideValue = getNestedValue(character, `sheet.calculatedOverrides.savingThrows.${abilityKey}`);
-
-  if (overrideValue !== null && overrideValue !== undefined && overrideValue !== "") {
-    return Number(overrideValue);
-  }
-
-  const proficiencyBonus = getCombatProficiencyBonus(character);
-  const proficient = Boolean(getNestedValue(character, `sheet.savingThrows.${abilityKey}.proficient`));
-  return getResolvedAbilityModifier(character, abilityKey) + (proficient ? proficiencyBonus : 0);
-}
-
-function getResolvedSkillModifier(character, skillKey) {
-  const overrideValue = getNestedValue(character, `sheet.calculatedOverrides.skills.${skillKey}`);
-
-  if (overrideValue !== null && overrideValue !== undefined && overrideValue !== "") {
-    return Number(overrideValue);
-  }
-
-  const skill = SKILL_CONFIG.find((entry) => entry.key === skillKey);
-  const proficiencyBonus = getCombatProficiencyBonus(character);
-  const skillState = getNestedValue(character, `sheet.skills.${skillKey}`) || {};
-  const baseModifier = getResolvedAbilityModifier(character, skill.ability);
-
-  if (skillState.expertise) {
-    return baseModifier + proficiencyBonus * 2;
-  }
-
-  if (skillState.proficient) {
-    return baseModifier + proficiencyBonus;
-  }
-
-  return baseModifier;
-}
-
-function getResolvedPassivePerception(character) {
-  const overrideValue = getNestedValue(character, "sheet.calculatedOverrides.passivePerception");
-
-  if (overrideValue !== null && overrideValue !== undefined && overrideValue !== "") {
-    return Number(overrideValue);
-  }
-
-  return 10 + getResolvedSkillModifier(character, "perception");
-}
-
 function formatSaveStatus() {
+  if (LOCAL_PREVIEW_MODE) {
+    return "Preview only";
+  }
+
   if (state.permissionDenied) {
     return "Save failed";
   }
@@ -728,13 +662,13 @@ const dom = {
   campaignDisplay: document.getElementById("campaign-display"),
   campaignNameInput: document.getElementById("campaign-name-input"),
   characterTablist: document.getElementById("character-tablist"),
+  clearDiceButton: document.getElementById("clear-dice-button"),
   clearHistoryButton: document.getElementById("clear-history-button"),
   configBanner: document.getElementById("config-banner"),
   dashboard: document.getElementById("dashboard"),
   diceBreakdown: document.getElementById("dice-breakdown"),
   diceButton: document.getElementById("dice-button"),
   diceCloseButton: document.getElementById("dice-close-button"),
-  diceCount: document.getElementById("dice-count"),
   diceFormula: document.getElementById("dice-formula"),
   diceHistory: document.getElementById("dice-history"),
   diceLive: document.getElementById("dice-live"),
@@ -742,17 +676,18 @@ const dom = {
   diceModifier: document.getElementById("dice-modifier"),
   diceResultCard: document.getElementById("dice-result-card"),
   diceTotal: document.getElementById("dice-total"),
+  diceTray: document.getElementById("dice-tray"),
   diceTypeGroup: document.getElementById("dice-type-group"),
   emailInput: document.getElementById("email-input"),
   exportAllButton: document.getElementById("export-all-button"),
   exportCurrentButton: document.getElementById("export-current-button"),
+  hpMeterFill: document.getElementById("hp-meter-fill"),
   importCharacterButton: document.getElementById("import-character-button"),
   importFileInput: document.getElementById("import-file-input"),
   lastUpdatedLabel: document.getElementById("last-updated-label"),
   loginButton: document.getElementById("login-button"),
   loginError: document.getElementById("login-error"),
   loginForm: document.getElementById("login-form"),
-  manualCalculationsToggle: document.getElementById("manual-calculations-toggle"),
   offlineBanner: document.getElementById("offline-banner"),
   pagePanels: Array.from(document.querySelectorAll("[data-page-panel]")),
   pageTablist: document.getElementById("page-tablist"),
@@ -760,6 +695,7 @@ const dom = {
   permissionBanner: document.getElementById("permission-banner"),
   printSheetButton: document.getElementById("print-sheet-button"),
   remoteUpdateLive: document.getElementById("remote-update-live"),
+  remoteUpdateMessage: document.getElementById("remote-update-message"),
   remoteUpdateNote: document.getElementById("remote-update-note"),
   resetCacheButton: document.getElementById("reset-cache-button"),
   rollButton: document.getElementById("roll-button"),
@@ -775,6 +711,7 @@ const dom = {
   signoutButton: document.getElementById("signout-button"),
   spellSections: document.getElementById("spell-sections"),
   skillsList: document.getElementById("skills-list"),
+  undoActionButton: document.getElementById("undo-action-button"),
   userLabel: document.getElementById("user-label")
 };
 
@@ -788,6 +725,7 @@ const state = {
   auth: null,
   currentModal: null,
   currentUser: null,
+  collapsedSpellLevels: new Set(),
   db: null,
   diceHistory: readLocalStorage(STORAGE_KEYS.diceHistory, []).slice(0, 10),
   dicePrefs: {
@@ -796,6 +734,8 @@ const state = {
     modifier: 0,
     ...readLocalStorage(STORAGE_KEYS.dicePrefs, {})
   },
+  diceTray: [],
+  diceTrayInitialized: false,
   editingTabId: null,
   initializingDefaults: false,
   isSyncingQueue: false,
@@ -807,10 +747,13 @@ const state = {
   inFlightWrites: new Map(),
   awaitingServerWrites: new Map(),
   pendingRemoteFields: new Set(),
+  pageObserver: null,
   permissionDenied: false,
   queuedWrites: readLocalStorage(STORAGE_KEYS.pendingWrites, {}),
   remoteReady: false,
   saveNoteTimer: null,
+  pendingUndo: null,
+  undoTimer: null,
   selectedCharacterId: CHARACTER_IDS.includes(readLocalStorage(STORAGE_KEYS.selectedCharacterId, CHARACTER_IDS[0]))
     ? readLocalStorage(STORAGE_KEYS.selectedCharacterId, CHARACTER_IDS[0])
     : CHARACTER_IDS[0],
@@ -834,6 +777,9 @@ function persistQueuedWrites() {
 }
 
 function persistDiceState() {
+  state.dicePrefs.tray = state.diceTray.map(({ id, die, value }) => ({ id, die, value }));
+  state.dicePrefs.count = state.diceTray.length;
+  state.dicePrefs.die = state.diceTray.at(-1)?.die || state.dicePrefs.die || "d20";
   writeLocalStorage(STORAGE_KEYS.dicePrefs, state.dicePrefs);
   writeLocalStorage(STORAGE_KEYS.diceHistory, state.diceHistory);
 }
@@ -844,14 +790,59 @@ function currentCharacter() {
 
 function renderTransientNote(message, timeout = 3000) {
   dom.remoteUpdateNote.hidden = false;
-  dom.remoteUpdateNote.textContent = message;
+  dom.remoteUpdateMessage.textContent = message;
+  dom.undoActionButton.hidden = true;
   dom.remoteUpdateLive.textContent = message;
 
   window.clearTimeout(state.saveNoteTimer);
   state.saveNoteTimer = window.setTimeout(() => {
     dom.remoteUpdateNote.hidden = true;
-    dom.remoteUpdateNote.textContent = "";
+    dom.remoteUpdateMessage.textContent = "";
   }, timeout);
+}
+
+function clearUndoState() {
+  window.clearTimeout(state.undoTimer);
+  state.undoTimer = null;
+  state.pendingUndo = null;
+  dom.undoActionButton.hidden = true;
+}
+
+function finalizePendingUndo() {
+  if (!state.pendingUndo) {
+    return;
+  }
+
+  const pending = state.pendingUndo;
+  clearUndoState();
+  pending.commit();
+}
+
+function showUndoableNote(message, commit, undo, timeout = 5000) {
+  finalizePendingUndo();
+  window.clearTimeout(state.saveNoteTimer);
+
+  state.pendingUndo = { commit, undo };
+  dom.remoteUpdateNote.hidden = false;
+  dom.remoteUpdateMessage.textContent = message;
+  dom.undoActionButton.hidden = false;
+  dom.remoteUpdateLive.textContent = `${message} Undo is available.`;
+
+  state.undoTimer = window.setTimeout(() => {
+    finalizePendingUndo();
+    dom.remoteUpdateNote.hidden = true;
+  }, timeout);
+}
+
+function undoPendingAction() {
+  if (!state.pendingUndo) {
+    return;
+  }
+
+  const pending = state.pendingUndo;
+  clearUndoState();
+  pending.undo();
+  renderTransientNote("Restored.");
 }
 
 function renderBanners() {
@@ -879,6 +870,10 @@ function renderSaveStatus() {
   const status = formatSaveStatus();
   dom.saveStatusIndicator.textContent = status;
   dom.saveStatusLive.textContent = status;
+  const statusCard = dom.saveStatusIndicator.closest(".status-card");
+  if (statusCard) {
+    statusCard.dataset.state = status === "Saved" ? "saved" : status.includes("failed") ? "error" : "working";
+  }
 }
 
 function renderCampaignDisplay() {
@@ -886,8 +881,8 @@ function renderCampaignDisplay() {
 }
 
 function renderAuthState() {
-  const canShowDashboard = state.signInResolved && Boolean(state.currentUser) && !state.configError;
-  const shouldShowAuth = state.signInResolved && !state.currentUser;
+  const canShowDashboard = LOCAL_PREVIEW_MODE || (state.signInResolved && Boolean(state.currentUser) && !state.configError);
+  const shouldShowAuth = state.signInResolved && !state.currentUser && !LOCAL_PREVIEW_MODE;
 
   dom.authLoadingScreen.hidden = canShowDashboard || state.signInResolved;
   dom.authScreen.hidden = canShowDashboard || !shouldShowAuth;
@@ -895,7 +890,8 @@ function renderAuthState() {
   dom.authLoadingScreen.setAttribute("aria-hidden", String(dom.authLoadingScreen.hidden));
   dom.authScreen.setAttribute("aria-hidden", String(dom.authScreen.hidden));
   dom.dashboard.setAttribute("aria-hidden", String(dom.dashboard.hidden));
-  dom.userLabel.textContent = state.currentUser ? currentUserStamp() : "Not signed in";
+  dom.userLabel.textContent = LOCAL_PREVIEW_MODE ? "Local preview" : state.currentUser ? currentUserStamp() : "Not signed in";
+  dom.signoutButton.hidden = LOCAL_PREVIEW_MODE;
   dom.loginButton.disabled = Boolean(state.configError);
   renderBanners();
   renderSaveStatus();
@@ -929,6 +925,13 @@ function renderCharacterTabs() {
   CHARACTER_IDS.forEach((characterId, index) => {
     const character = state.characters[characterId] || createDefaultCharacter(characterId, index);
     const currentName = character.meta.name;
+    const identity = character.sheet?.identity || {};
+    const initials = currentName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || String(index + 1);
     const wrapper = createElement("div", {
       className: `character-card${characterId === state.selectedCharacterId ? " is-selected" : ""}`
     });
@@ -965,34 +968,34 @@ function renderCharacterTabs() {
       }
     });
 
-    const titleRow = createElement("div", { className: "character-tab-name-row" });
+    const profile = createElement("div", { className: "character-tab-profile" });
+    const avatar = createElement("span", { className: "character-tab-avatar", text: initials });
     const title = createElement("span", { className: "character-tab-title", text: character.meta.name });
     const playerName = createElement("span", {
       className: "character-tab-player",
-      text: getNestedValue(character, "sheet.identity.playerName") || "No player name"
+      text: identity.playerName || "No player name"
     });
     const titleBlock = createElement("div", { className: "character-tab-title-block" });
     titleBlock.append(title, playerName);
+    profile.append(avatar, titleBlock);
+    tabButton.appendChild(profile);
+
+    const profileDetails = [identity.class, identity.level ? `Level ${identity.level}` : ""].filter(Boolean);
+    const metaText = state.savingTabNameId === characterId ? "Saving..." : profileDetails.join(" | ") || "Character details not set";
+    tabButton.appendChild(createElement("span", { className: "character-tab-meta", text: metaText }));
+
     const editButton = createElement("button", {
-      className: "btn btn-ghost btn-small tab-edit-button",
+      className: "tab-edit-button",
       type: "button",
-      text: "Rename",
+      text: "...",
       attributes: {
+        "aria-label": `Rename ${currentName}`,
+        title: `Rename ${currentName}`,
         "data-character-edit": characterId
       }
     });
 
-    titleRow.append(titleBlock, editButton);
-    tabButton.appendChild(titleRow);
-
-    const metaText =
-      state.savingTabNameId === characterId
-        ? "Saving..."
-        : `Record ${index + 1} | ${describeTimestamp(character.meta.updatedAt)}`;
-
-    tabButton.appendChild(createElement("span", { className: "character-tab-meta", text: metaText }));
-
-    wrapper.appendChild(tabButton);
+    wrapper.append(tabButton, editButton);
     dom.characterTablist.appendChild(wrapper);
   });
 }
@@ -1019,40 +1022,7 @@ function controlDesiredValue(control, character) {
     return [damage, damageType].filter(Boolean).join(" ").trim();
   }
 
-  if (control.dataset.calculatedKind === "abilityModifier") {
-    return getResolvedAbilityModifier(character, control.dataset.ability);
-  }
-
-  if (control.dataset.calculatedKind === "savingThrow") {
-    return getResolvedSavingThrow(character, control.dataset.ability);
-  }
-
-  if (control.dataset.calculatedKind === "skillModifier") {
-    return getResolvedSkillModifier(character, control.dataset.skill);
-  }
-
-  if (control.dataset.calculatedKind === "passivePerception") {
-    return getResolvedPassivePerception(character);
-  }
-
   return getNestedValue(character.sheet, fieldPath);
-}
-
-function formatSignedValue(value) {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) {
-    return String(value);
-  }
-
-  if (numericValue > 0) {
-    return `+${numericValue}`;
-  }
-
-  return String(numericValue);
 }
 
 function renderFieldControl(control, character) {
@@ -1064,20 +1034,68 @@ function renderFieldControl(control, character) {
     return;
   }
 
-  if (control.dataset.calculatedKind) {
-    control.readOnly = false;
-  }
-
   if (isFocused) {
     const currentValue = control.value;
-    const desiredComparable = control.dataset.signedNumber ? formatSignedValue(desiredValue) : desiredValue ?? "";
+    const desiredComparable = String(desiredValue ?? "");
     if (currentValue !== desiredComparable) {
       state.pendingRemoteFields.add(control.dataset.field);
     }
     return;
   }
 
-  control.value = control.dataset.signedNumber ? formatSignedValue(desiredValue) : desiredValue ?? "";
+  control.value = desiredValue ?? "";
+}
+
+function renderVitalControls(character) {
+  const current = Number(getNestedValue(character, "sheet.combat.currentHitPoints"));
+  const maximum = Number(getNestedValue(character, "sheet.combat.hitPointMaximum"));
+  const validMaximum = Number.isFinite(maximum) && maximum > 0;
+  const percentage = validMaximum && Number.isFinite(current)
+    ? Math.max(0, Math.min(100, (current / maximum) * 100))
+    : 0;
+
+  if (dom.hpMeterFill) {
+    dom.hpMeterFill.style.width = `${percentage}%`;
+    dom.hpMeterFill.parentElement.dataset.state = percentage <= 25 ? "critical" : percentage <= 50 ? "wounded" : "healthy";
+  }
+
+  dom.sheetForm.querySelectorAll("[data-death-save-group]").forEach((group) => {
+    const fieldPath = group.dataset.deathSaveGroup;
+    const value = Number(getNestedValue(character, `sheet.${fieldPath}`)) || 0;
+    group.querySelectorAll("[data-death-save-value]").forEach((button) => {
+      const pipValue = Number(button.dataset.deathSaveValue);
+      button.setAttribute("aria-pressed", String(pipValue <= value));
+    });
+  });
+}
+
+function renderSpellSlotPips(character) {
+  dom.spellSections.querySelectorAll("[data-spell-slot-pips]").forEach((container) => {
+    const levelKey = container.dataset.spellSlotPips;
+    const total = Math.max(0, Math.min(9, Number(getNestedValue(character, `sheet.spellcasting.${levelKey}.slotsTotal`)) || 0));
+    const expended = Math.max(0, Math.min(total, Number(getNestedValue(character, `sheet.spellcasting.${levelKey}.slotsExpended`)) || 0));
+    container.textContent = "";
+
+    if (!total) {
+      container.appendChild(createElement("span", { className: "spell-slot-empty", text: "Set total slots to create pips" }));
+      return;
+    }
+
+    for (let index = 1; index <= total; index += 1) {
+      container.appendChild(
+        createElement("button", {
+          className: "spell-slot-pip",
+          type: "button",
+          attributes: {
+            "aria-label": `${index <= expended ? "Restore" : "Expend"} spell slot ${index}`,
+            "aria-pressed": index <= expended,
+            "data-spell-slot-level": levelKey,
+            "data-spell-slot-value": index
+          }
+        })
+      );
+    }
+  });
 }
 
 function renderAllFields() {
@@ -1089,6 +1107,9 @@ function renderAllFields() {
   Array.from(dom.sheetForm.querySelectorAll("[data-field]")).forEach((control) => {
     renderFieldControl(control, character);
   });
+
+  renderVitalControls(character);
+  renderSpellSlotPips(character);
 }
 
 function renderAttacks() {
@@ -1097,8 +1118,8 @@ function renderAttacks() {
   tbody.textContent = "";
 
   Object.entries(rows).forEach(([rowId]) => {
-    const row = createElement("tr");
-    const nameCell = createElement("td");
+    const row = createElement("tr", { className: "attack-row" });
+    const nameCell = createElement("td", { attributes: { "data-label": "Name" } });
     nameCell.appendChild(
       createElement("input", {
         type: "text",
@@ -1110,7 +1131,7 @@ function renderAttacks() {
     );
     row.appendChild(nameCell);
 
-    const bonusCell = createElement("td");
+    const bonusCell = createElement("td", { attributes: { "data-label": "Attack Bonus" } });
     bonusCell.appendChild(
       createElement("input", {
         type: "text",
@@ -1122,7 +1143,10 @@ function renderAttacks() {
     );
     row.appendChild(bonusCell);
 
-    const damageCell = createElement("td", { className: "attack-damage-cell" });
+    const damageCell = createElement("td", {
+      className: "attack-damage-cell",
+      attributes: { "data-label": "Damage / Type" }
+    });
     damageCell.appendChild(
       createElement("input", {
         type: "text",
@@ -1136,12 +1160,14 @@ function renderAttacks() {
     );
     row.appendChild(damageCell);
 
-    const actionCell = createElement("td", { className: "attack-action-cell" });
+    const actionCell = createElement("td", {
+      className: "attack-action-cell",
+      attributes: { "data-label": "Action" }
+    });
     actionCell.appendChild(
       createElement("button", {
-        className: "btn btn-danger btn-small icon-action-button",
+        className: "btn btn-danger btn-small icon-action-button delete-icon-button",
         type: "button",
-        text: "🗑",
         attributes: {
           "aria-label": `Delete attack ${rowId}`,
           title: "Delete attack",
@@ -1160,156 +1186,304 @@ function renderSpellSections() {
   dom.spellSections.textContent = "";
   const character = currentCharacter();
 
-  SPELL_COLUMN_GROUPS.forEach((group, columnIndex) => {
-    const column = createElement("div", { className: `spell-column spell-column-${columnIndex + 1}` });
-
-    group.forEach((levelKey) => {
-      const level = SPELL_LEVELS.find((entry) => entry.key === levelKey);
-      const section = createElement("section", { className: `spell-section spell-section-${level.key}` });
-      const header = createElement("div", { className: "spell-section-header" });
-      const badge = createElement("span", {
-        className: "spell-level-badge",
-        text: SPELL_LEVEL_BADGES[level.key]
-      });
-      const title = createElement("h3", {
-        className: "spell-level-title",
-        text: level.label
-      });
-      const addButton = createElement("button", {
-        className: "btn btn-secondary btn-small spell-add-button",
-        type: "button",
-        text: "Add",
-        attributes: {
-          "data-add-spell": level.key
-        }
-      });
-
-      header.append(badge, title, addButton);
-      section.appendChild(header);
-
-      if (level.slotBased) {
-        const metaGrid = createElement("div", { className: "spell-meta-grid" });
-        ["slotsTotal", "slotsExpended"].forEach((fieldKey) => {
-          const field = createElement("label", { className: "field-block" });
-          const labelText = fieldKey === "slotsTotal" ? "Slots Total" : "Slots Expended";
-          field.appendChild(createElement("span", { text: labelText }));
-          field.appendChild(
-            createElement("input", {
-              type: "number",
-              attributes: {
-                "aria-label": `${labelText} for ${level.label}`,
-                "data-field": `spellcasting.${level.key}.${fieldKey}`,
-                min: 0,
-                max: 99,
-                inputmode: "numeric"
-              }
-            })
-          );
-          metaGrid.appendChild(field);
-        });
-        section.appendChild(metaGrid);
+  SPELL_LEVELS.forEach((level) => {
+    const isCollapsed = state.collapsedSpellLevels.has(level.key);
+    const rows = getNestedValue(character, `sheet.spellcasting.${level.key}.rows`) || {};
+    const spellCount = Object.keys(rows).length;
+    const section = createElement("section", {
+      className: `spell-section spell-section-${level.key}${isCollapsed ? " is-collapsed" : ""}`
+    });
+    const header = createElement("div", { className: "spell-section-header" });
+    const collapseButton = createElement("button", {
+      className: "spell-collapse-button",
+      type: "button",
+      attributes: {
+        "aria-expanded": !isCollapsed,
+        "data-toggle-spell-level": level.key
       }
-
-      const table = createElement("table", { className: "spell-table" });
-      const thead = createElement("thead");
-      const headRow = createElement("tr");
-      ["Prep", "Spell", "Notes", "Action"].forEach((label) => {
-        headRow.appendChild(createElement("th", { text: label }));
-      });
-      thead.appendChild(headRow);
-      table.appendChild(thead);
-
-      const tbody = createElement("tbody");
-      const rows = getNestedValue(character, `sheet.spellcasting.${level.key}.rows`) || {};
-      Object.entries(rows).forEach(([rowId]) => {
-        const row = createElement("tr");
-
-        const preparedCell = createElement("td");
-        preparedCell.appendChild(
-          createElement("input", {
-            type: "checkbox",
-            attributes: {
-              "aria-label": `Prepared status for ${level.label} ${rowId}`,
-              "data-field": `spellcasting.${level.key}.rows.${rowId}.prepared`
-            }
-          })
-        );
-        row.appendChild(preparedCell);
-
-        const nameCell = createElement("td");
-        nameCell.appendChild(
-          createElement("input", {
-            type: "text",
-            attributes: {
-              "aria-label": `Spell name for ${level.label} ${rowId}`,
-              "data-field": `spellcasting.${level.key}.rows.${rowId}.spellName`
-            }
-          })
-        );
-        row.appendChild(nameCell);
-
-        const notesCell = createElement("td");
-        notesCell.appendChild(
-          createElement("textarea", {
-            attributes: {
-              "aria-label": `Spell notes for ${level.label} ${rowId}`,
-              "data-field": `spellcasting.${level.key}.rows.${rowId}.notes`,
-              rows: 2
-            }
-          })
-        );
-        row.appendChild(notesCell);
-
-        const actionCell = createElement("td", { className: "spell-action-cell" });
-        actionCell.appendChild(
-          createElement("button", {
-            className: "btn btn-danger btn-small icon-action-button spell-delete-button",
-            type: "button",
-            text: "X",
-            attributes: {
-              title: "Delete spell",
-              "aria-label": `Delete ${level.label} ${rowId}`,
-              "data-delete-spell": `${level.key}:${rowId}`
-            }
-          })
-        );
-        row.appendChild(actionCell);
-        tbody.appendChild(row);
-      });
-
-      table.appendChild(tbody);
-      section.appendChild(table);
-      column.appendChild(section);
+    });
+    const badge = createElement("span", {
+      className: "spell-level-badge",
+      text: SPELL_LEVEL_BADGES[level.key]
+    });
+    const title = createElement("h3", {
+      className: "spell-level-title",
+      text: level.label
+    });
+    const count = createElement("span", {
+      className: "spell-count",
+      text: `${spellCount} ${spellCount === 1 ? "spell" : "spells"}`
+    });
+    const titleWrap = createElement("span", { className: "spell-title-wrap" });
+    const chevron = createElement("span", { className: "spell-chevron", text: "+" });
+    titleWrap.append(title, count);
+    collapseButton.append(badge, titleWrap, chevron);
+    const addButton = createElement("button", {
+      className: "btn btn-secondary btn-small spell-add-button",
+      type: "button",
+      text: "Add",
+      attributes: {
+        "data-add-spell": level.key
+      }
     });
 
-    dom.spellSections.appendChild(column);
+    header.append(collapseButton, addButton);
+    const body = createElement("div", { className: "spell-section-body" });
+    body.hidden = isCollapsed;
+    section.append(header, body);
+
+    if (level.slotBased) {
+      const metaGrid = createElement("div", { className: "spell-meta-grid" });
+      ["slotsTotal", "slotsExpended"].forEach((fieldKey) => {
+        const field = createElement("label", { className: "field-block" });
+        const labelText = fieldKey === "slotsTotal" ? "Slots Total" : "Slots Expended";
+        field.appendChild(createElement("span", { text: labelText }));
+        field.appendChild(
+          createElement("input", {
+            type: "number",
+            attributes: {
+              "aria-label": `${labelText} for ${level.label}`,
+              "data-field": `spellcasting.${level.key}.${fieldKey}`,
+              min: 0,
+              max: 99,
+              inputmode: "numeric"
+            }
+          })
+        );
+        metaGrid.appendChild(field);
+      });
+      body.appendChild(metaGrid);
+      body.appendChild(
+        createElement("div", {
+          className: "spell-slot-pips",
+          attributes: {
+            "data-spell-slot-pips": level.key,
+            "aria-label": `${level.label} spell slots`
+          }
+        })
+      );
+    }
+
+    const table = createElement("table", { className: "spell-table" });
+    const thead = createElement("thead");
+    const headRow = createElement("tr");
+    ["Prep", "Spell", "Notes", "Action"].forEach((label) => {
+      headRow.appendChild(createElement("th", { text: label }));
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = createElement("tbody");
+    Object.entries(rows).forEach(([rowId]) => {
+      const row = createElement("tr", { className: "spell-row" });
+
+      const preparedCell = createElement("td", {
+        className: "spell-prepared-cell",
+        attributes: { "data-label": "Prepared" }
+      });
+      preparedCell.appendChild(
+        createElement("input", {
+          type: "checkbox",
+          attributes: {
+            "aria-label": `Prepared status for ${level.label} ${rowId}`,
+            "data-field": `spellcasting.${level.key}.rows.${rowId}.prepared`
+          }
+        })
+      );
+      row.appendChild(preparedCell);
+
+      const nameCell = createElement("td", { attributes: { "data-label": "Spell" } });
+      nameCell.appendChild(
+        createElement("input", {
+          type: "text",
+          attributes: {
+            "aria-label": `Spell name for ${level.label} ${rowId}`,
+            "data-field": `spellcasting.${level.key}.rows.${rowId}.spellName`
+          }
+        })
+      );
+      row.appendChild(nameCell);
+
+      const notesCell = createElement("td", { attributes: { "data-label": "Notes" } });
+      notesCell.appendChild(
+        createElement("textarea", {
+          attributes: {
+            "aria-label": `Spell notes for ${level.label} ${rowId}`,
+            "data-field": `spellcasting.${level.key}.rows.${rowId}.notes`,
+            rows: 2
+          }
+        })
+      );
+      row.appendChild(notesCell);
+
+      const actionCell = createElement("td", {
+        className: "spell-action-cell",
+        attributes: { "data-label": "Action" }
+      });
+      actionCell.appendChild(
+        createElement("button", {
+          className: "btn btn-danger btn-small icon-action-button spell-delete-button delete-icon-button",
+          type: "button",
+          attributes: {
+            title: "Delete spell",
+            "aria-label": `Delete ${level.label} ${rowId}`,
+            "data-delete-spell": `${level.key}:${rowId}`
+          }
+        })
+      );
+      row.appendChild(actionCell);
+      tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    body.appendChild(table);
+    dom.spellSections.appendChild(section);
   });
 
   renderAllFields();
+}
+
+function createDiceIcon(dieType, className = "dice-icon") {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", className);
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("aria-hidden", "true");
+
+  (DICE_ICON_PATHS[dieType] || DICE_ICON_PATHS.d20).forEach((pathData) => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathData);
+    svg.appendChild(path);
+  });
+
+  return svg;
+}
+
+function ensureDiceTray() {
+  if (state.diceTrayInitialized) {
+    return;
+  }
+
+  const storedTray = state.dicePrefs.tray;
+  if (Array.isArray(storedTray)) {
+    state.diceTray = storedTray
+      .filter((entry) => DICE_TYPES.includes(entry?.die))
+      .slice(0, 20)
+      .map((entry) => ({
+        id: entry.id || generateStableId("die"),
+        die: entry.die,
+        value: clampNumber(entry.value, 1, Number(entry.die.slice(1)), 1)
+      }));
+  } else {
+    const legacyDie = DICE_TYPES.includes(state.dicePrefs.die) ? state.dicePrefs.die : "d20";
+    const legacyCount = clampNumber(state.dicePrefs.count, 1, 10, 1);
+    const sides = Number(legacyDie.slice(1));
+    state.diceTray = Array.from({ length: legacyCount }, () => ({
+      id: generateStableId("die"),
+      die: legacyDie,
+      value: cryptoRoll(sides)
+    }));
+  }
+
+  state.diceTrayInitialized = true;
+}
+
+function diceFormula(dice, modifier = 0) {
+  const parts = DICE_TYPES.map((dieType) => {
+    const count = dice.filter((die) => die.die === dieType).length;
+    return count ? `${count}${dieType}` : "";
+  }).filter(Boolean);
+  const baseFormula = parts.join(" + ");
+  return modifier
+    ? `${baseFormula}${baseFormula ? " " : ""}${modifier > 0 ? "+" : "-"} ${Math.abs(modifier)}`
+    : baseFormula;
+}
+
+function currentDiceResult() {
+  ensureDiceTray();
+  const modifier = clampNumber(state.dicePrefs.modifier, -99, 99, 0);
+  const dice = state.diceTray.map((entry) => ({ ...entry }));
+  const total = dice.reduce((sum, entry) => sum + Number(entry.value || 0), 0) + modifier;
+
+  return {
+    formula: diceFormula(dice, modifier),
+    dice,
+    results: dice.map((entry) => entry.value),
+    modifier,
+    total,
+    isNatural20: dice.length === 1 && dice[0].die === "d20" && modifier === 0 && dice[0].value === 20,
+    isNatural1: dice.length === 1 && dice[0].die === "d20" && modifier === 0 && dice[0].value === 1
+  };
 }
 
 function renderDiceOptions() {
   dom.diceTypeGroup.textContent = "";
 
   DICE_TYPES.forEach((dieType) => {
+    const count = state.diceTray.filter((die) => die.die === dieType).length;
     const button = createElement("button", {
-      className: "dice-type-button",
+      className: `dice-type-button${count ? " has-dice" : ""}`,
       type: "button",
-      text: dieType,
       attributes: {
-        role: "radio",
-        "aria-checked": state.dicePrefs.die === dieType,
-        "data-die": dieType
+        "aria-label": `Add ${dieType}${count ? `, ${count} currently in tray` : ""}`,
+        "data-die": dieType,
+        "data-count": count
       }
     });
+    button.append(
+      createDiceIcon(dieType),
+      createElement("span", { className: "dice-type-label", text: dieType })
+    );
+    if (count) {
+      button.appendChild(createElement("span", { className: "dice-type-count", text: count }));
+    }
     dom.diceTypeGroup.appendChild(button);
   });
 }
 
+function renderDiceTray() {
+  dom.diceTray.textContent = "";
+
+  if (!state.diceTray.length) {
+    const emptyState = createElement("div", { className: "dice-tray-empty" });
+    emptyState.append(
+      createDiceIcon("d20", "dice-empty-icon"),
+      createElement("strong", { text: "Your dice tray is empty" }),
+      createElement("span", { text: "Choose a die below to roll it." })
+    );
+    dom.diceTray.appendChild(emptyState);
+    return;
+  }
+
+  state.diceTray.forEach((die) => {
+    const button = createElement("button", {
+      className: "dice-tray-item",
+      type: "button",
+      attributes: {
+        "aria-label": `Remove ${die.die} showing ${die.value}`,
+        title: `Remove this ${die.die}`,
+        "data-remove-die": die.id,
+        "data-die-type": die.die
+      }
+    });
+    const face = createElement("span", { className: "dice-result-face" });
+    face.append(
+      createDiceIcon(die.die, "dice-result-icon"),
+      createElement("strong", { className: "dice-face-value", text: die.value })
+    );
+    button.append(
+      face,
+      createElement("span", { className: "dice-result-type", text: die.die })
+    );
+    dom.diceTray.appendChild(button);
+  });
+}
+
 function renderDiceInputs() {
-  dom.diceCount.value = String(clampNumber(state.dicePrefs.count, 1, 10, 1));
+  ensureDiceTray();
   dom.diceModifier.value = String(clampNumber(state.dicePrefs.modifier, -99, 99, 0));
   renderDiceOptions();
+  renderDiceTray();
+  renderDiceResult(currentDiceResult());
 }
 
 function renderDiceHistory() {
@@ -1321,8 +1495,16 @@ function renderDiceHistory() {
   }
 
   state.diceHistory.forEach((entry) => {
-    const item = createElement("li");
-    item.textContent = `${entry.formula} = ${entry.total} (${entry.results.join(", ")})`;
+    const results = Array.isArray(entry.dice)
+      ? entry.dice.map((die) => `${die.die}: ${die.value}`).join(", ")
+      : (entry.results || []).join(", ");
+    const item = createElement("li", { className: "dice-history-item" });
+    const copy = createElement("span", { className: "dice-history-copy" });
+    copy.append(
+      createElement("strong", { text: entry.formula || "Roll" }),
+      createElement("small", { text: results || "No dice" })
+    );
+    item.append(copy, createElement("strong", { className: "dice-history-total", text: entry.total }));
     dom.diceHistory.appendChild(item);
   });
 }
@@ -1450,6 +1632,14 @@ async function commitWrite(characterId, relativePath, value, options = {}) {
   const queueable = options.queueable !== false;
   const pendingKey = options.pendingKey || null;
   const key = options.writeKey || writeKey(characterId, relativePath);
+
+  if (LOCAL_PREVIEW_MODE) {
+    if (pendingKey) {
+      state.inFlightWrites.delete(pendingKey);
+    }
+    renderSaveStatus();
+    return;
+  }
 
   if (!state.db || !state.currentUser) {
     if (queueable) {
@@ -1686,12 +1876,7 @@ function parseControlValue(control) {
   }
 
   if (control.dataset.signedNumber) {
-    const trimmedValue = control.value.trim();
-    if (trimmedValue === "") {
-      return null;
-    }
-    const numericValue = Number(trimmedValue);
-    return Number.isFinite(numericValue) ? numericValue : null;
+    return normalizeText(control.value, 8).trim();
   }
 
   if (control.type === "number") {
@@ -1727,7 +1912,7 @@ function normalizeFieldValue(fieldPath, rawValue) {
   }
 
   if (fieldPath.startsWith("calculatedOverrides.")) {
-    return rawValue === null || rawValue === "" ? null : Number(rawValue);
+    return rawValue === null || rawValue === "" ? null : normalizeText(rawValue, 8).trim();
   }
 
   if (fieldPath.startsWith("identity.level")) {
@@ -1743,27 +1928,6 @@ function normalizeFieldValue(fieldPath, rawValue) {
   }
 
   return normalizeText(rawValue);
-}
-
-function handleDerivedFieldDependencies(fieldPath, value) {
-  if (fieldPath.startsWith("skills.") && fieldPath.endsWith(".expertise")) {
-    const skillKey = fieldPath.split(".")[1];
-    if (value) {
-      const proficientField = `skills.${skillKey}.proficient`;
-      applyRelativeUpdate(state.selectedCharacterId, relativePathFromFieldPath(proficientField), true);
-      scheduleWrite(state.selectedCharacterId, relativePathFromFieldPath(proficientField), true, 0);
-    }
-  }
-
-  if (fieldPath.startsWith("skills.") && fieldPath.endsWith(".proficient")) {
-    const skillKey = fieldPath.split(".")[1];
-    const expertisePath = `skills.${skillKey}.expertise`;
-    const expertiseValue = getNestedValue(currentCharacter(), `sheet.${expertisePath}`);
-    if (!value && expertiseValue) {
-      applyRelativeUpdate(state.selectedCharacterId, relativePathFromFieldPath(expertisePath), false);
-      scheduleWrite(state.selectedCharacterId, relativePathFromFieldPath(expertisePath), false, 0);
-    }
-  }
 }
 
 function handleSheetFieldInteraction(control, mode) {
@@ -1806,7 +1970,6 @@ function handleSheetFieldInteraction(control, mode) {
       : 600;
 
   applyRelativeUpdate(state.selectedCharacterId, relativePath, normalizedValue);
-  handleDerivedFieldDependencies(fieldPath, normalizedValue);
   renderAllFields();
   renderSaveStatus();
   scheduleWrite(state.selectedCharacterId, relativePath, normalizedValue, delay);
@@ -1868,6 +2031,7 @@ function selectCharacter(characterId) {
     return;
   }
 
+  finalizePendingUndo();
   flushPendingWrites(state.selectedCharacterId);
   state.selectedCharacterId = characterId;
   writeLocalStorage(STORAGE_KEYS.selectedCharacterId, characterId);
@@ -1941,6 +2105,35 @@ function handlePageTabKeydown(event) {
   }
 }
 
+function initializePageTracking() {
+  if (!("IntersectionObserver" in window) || state.pageObserver) {
+    return;
+  }
+
+  state.pageObserver = new IntersectionObserver(
+    (entries) => {
+      const visibleEntry = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+
+      const pageId = visibleEntry?.target?.dataset?.pagePanel;
+      if (!PAGE_IDS.includes(pageId) || pageId === state.selectedPage) {
+        return;
+      }
+
+      state.selectedPage = pageId;
+      writeLocalStorage(STORAGE_KEYS.activePage, pageId);
+      renderPageTabs();
+    },
+    {
+      rootMargin: "-18% 0px -68% 0px",
+      threshold: [0, 0.1, 0.3, 0.6]
+    }
+  );
+
+  dom.pagePanels.forEach((panel) => state.pageObserver.observe(panel));
+}
+
 function openModal(modalName, triggerElement) {
   closeModal();
   state.currentModal = modalName;
@@ -1954,7 +2147,6 @@ function openModal(modalName, triggerElement) {
 
   if (modalName === "settings") {
     dom.campaignNameInput.value = state.localCampaignName;
-    dom.manualCalculationsToggle.checked = isManualCalculationsEnabled(currentCharacter());
     dom.settingsModal.hidden = false;
     dom.campaignNameInput.focus();
   }
@@ -2011,7 +2203,9 @@ function resetLocalCache() {
   Object.values(STORAGE_KEYS).forEach((key) => removeLocalStorage(key));
   state.queuedWrites = {};
   state.diceHistory = [];
-  state.dicePrefs = { die: "d20", count: 1, modifier: 0 };
+  state.dicePrefs = { die: "d20", count: 0, modifier: 0, tray: [] };
+  state.diceTray = [];
+  state.diceTrayInitialized = true;
   state.localCampaignName = "Main Campaign";
   persistQueuedWrites();
   persistDiceState();
@@ -2140,12 +2334,6 @@ function persistSettings() {
   state.localCampaignName = normalizeText(dom.campaignNameInput.value, 60).trim() || "Main Campaign";
   writeLocalStorage(STORAGE_KEYS.campaignName, state.localCampaignName);
   renderCampaignDisplay();
-
-  const manualEnabled = dom.manualCalculationsToggle.checked;
-  applyRelativeUpdate(state.selectedCharacterId, "sheet/settings/manualCalculations", manualEnabled);
-  renderAllFields();
-  renderSaveStatus();
-  commitWrite(state.selectedCharacterId, "sheet/settings/manualCalculations", manualEnabled);
   closeModal();
 }
 
@@ -2162,42 +2350,74 @@ function cryptoRoll(sides) {
 }
 
 function renderDiceResult(result) {
-  dom.diceFormula.textContent = result.formula;
-  const modifierText = result.modifier ? ` | Modifier ${result.modifier >= 0 ? "+" : ""}${result.modifier}` : "";
-  dom.diceBreakdown.textContent = `Results: ${result.results.join(", ")}${modifierText}`;
-  dom.diceTotal.textContent = String(result.total);
-  dom.diceResultCard.classList.toggle("is-natural-20", result.isNatural20);
-  dom.diceResultCard.classList.toggle("is-natural-1", result.isNatural1);
-  dom.diceLive.textContent = `${result.formula} totals ${result.total}.`;
+  const dice = Array.isArray(result?.dice) ? result.dice : [];
+  const hasDice = dice.length > 0;
+  dom.diceFormula.textContent = hasDice ? result.formula : "Choose dice below to begin.";
+  const modifierText = result?.modifier ? ` | Modifier ${result.modifier >= 0 ? "+" : ""}${result.modifier}` : "";
+  dom.diceBreakdown.textContent = hasDice
+    ? `${dice.map((entry) => `${entry.die} rolled ${entry.value}`).join(" | ")}${modifierText}`
+    : "Each die will appear here with its result.";
+  dom.diceTotal.textContent = hasDice ? String(result.total) : "-";
+  dom.diceResultCard.classList.toggle("is-natural-20", Boolean(result?.isNatural20));
+  dom.diceResultCard.classList.toggle("is-natural-1", Boolean(result?.isNatural1));
+  dom.diceLive.textContent = hasDice ? `${result.formula} totals ${result.total}.` : "The dice tray is empty.";
+}
+
+function animateDiceStage() {
+  dom.diceResultCard.classList.remove("is-rolling");
+  void dom.diceResultCard.offsetWidth;
+  dom.diceResultCard.classList.add("is-rolling");
+  window.setTimeout(() => dom.diceResultCard.classList.remove("is-rolling"), 560);
+}
+
+function addDieToTray(dieType) {
+  if (!DICE_TYPES.includes(dieType) || state.diceTray.length >= 20) {
+    if (state.diceTray.length >= 20) {
+      renderTransientNote("The dice tray can hold up to 20 dice.");
+    }
+    return;
+  }
+
+  state.diceTray.push({
+    id: generateStableId("die"),
+    die: dieType,
+    value: cryptoRoll(Number(dieType.slice(1)))
+  });
+  state.dicePrefs.die = dieType;
+  persistDiceState();
+  renderDiceInputs();
+  animateDiceStage();
+}
+
+function removeDieFromTray(dieId) {
+  state.diceTray = state.diceTray.filter((die) => die.id !== dieId);
+  persistDiceState();
+  renderDiceInputs();
+}
+
+function clearDiceTray() {
+  state.diceTray = [];
+  persistDiceState();
+  renderDiceInputs();
 }
 
 function rollDice() {
-  const count = clampNumber(dom.diceCount.value, 1, 10, 1);
-  const modifier = clampNumber(dom.diceModifier.value, -99, 99, 0);
-  const dieType = state.dicePrefs.die;
-  const sides = Number(dieType.replace("d", ""));
-  const results = [];
-
-  for (let index = 0; index < count; index += 1) {
-    results.push(cryptoRoll(sides));
+  if (!state.diceTray.length) {
+    renderTransientNote("Add at least one die before rolling.");
+    return;
   }
 
-  const total = results.reduce((sum, value) => sum + value, 0) + modifier;
-  const result = {
-    formula: `${count}${dieType}${modifier ? ` ${modifier > 0 ? "+" : "-"} ${Math.abs(modifier)}` : ""}`,
-    results,
-    modifier,
-    total,
-    isNatural20: dieType === "d20" && count === 1 && modifier === 0 && results[0] === 20,
-    isNatural1: dieType === "d20" && count === 1 && modifier === 0 && results[0] === 1
-  };
-
-  state.dicePrefs = { die: dieType, count, modifier };
-  state.diceHistory = [result, ...state.diceHistory].slice(0, 10);
+  state.dicePrefs.modifier = clampNumber(dom.diceModifier.value, -99, 99, 0);
+  state.diceTray = state.diceTray.map((die) => ({
+    ...die,
+    value: cryptoRoll(Number(die.die.slice(1)))
+  }));
+  const result = currentDiceResult();
+  state.diceHistory = [{ ...result, rolledAt: Date.now() }, ...state.diceHistory].slice(0, 10);
   persistDiceState();
   renderDiceInputs();
   renderDiceHistory();
-  renderDiceResult(result);
+  animateDiceStage();
 }
 
 function buildAbilityCards() {
@@ -2238,8 +2458,6 @@ function buildAbilityCards() {
         attributes: {
           "aria-label": `${ability.label} modifier`,
           "data-field": `calculatedOverrides.abilityModifiers.${ability.key}`,
-          "data-calculated-kind": "abilityModifier",
-          "data-ability": ability.key,
           "data-signed-number": "true",
           inputmode: "text"
         }
@@ -2271,8 +2489,6 @@ function buildSavingThrowsList() {
       attributes: {
         "aria-label": `${ability.label} saving throw`,
         "data-field": `calculatedOverrides.savingThrows.${ability.key}`,
-        "data-calculated-kind": "savingThrow",
-        "data-ability": ability.key,
         "data-signed-number": "true",
         inputmode: "text"
       }
@@ -2305,8 +2521,6 @@ function buildSkillsList() {
       attributes: {
         "aria-label": `${skill.label} modifier`,
         "data-field": `calculatedOverrides.skills.${skill.key}`,
-        "data-calculated-kind": "skillModifier",
-        "data-skill": skill.key,
         "data-signed-number": "true",
         inputmode: "text"
       }
@@ -2323,15 +2537,8 @@ function initializeStaticUi() {
   buildSkillsList();
   renderDiceInputs();
   renderDiceHistory();
-  renderDiceResult({
-    formula: "Choose your roll.",
-    results: [],
-    modifier: 0,
-    total: "-",
-    isNatural20: false,
-    isNatural1: false
-  });
   renderSheet();
+  initializePageTracking();
 }
 
 async function handleSignInSubmit(event) {
@@ -2363,6 +2570,7 @@ async function handleSignInSubmit(event) {
 }
 
 async function signOutCurrentUser() {
+  finalizePendingUndo();
   flushPendingWrites();
   try {
     await firebaseSignOut(state.auth);
@@ -2374,6 +2582,7 @@ async function signOutCurrentUser() {
 
 function handleVisibilityChange() {
   if (document.visibilityState === "hidden") {
+    finalizePendingUndo();
     flushPendingWrites();
   }
 }
@@ -2454,13 +2663,60 @@ function bindEvents() {
   });
 
   dom.sheetForm.addEventListener("click", (event) => {
+    const deathSaveButton = event.target.closest("[data-death-save-value]");
+    if (deathSaveButton) {
+      const group = deathSaveButton.closest("[data-death-save-group]");
+      const control = group?.querySelector("[data-field]");
+      if (control) {
+        const selectedValue = Number(deathSaveButton.dataset.deathSaveValue);
+        const currentValue = Number(control.value) || 0;
+        control.value = String(currentValue >= selectedValue ? selectedValue - 1 : selectedValue);
+        handleSheetFieldInteraction(control, "change");
+      }
+      return;
+    }
+
+    const spellSlotButton = event.target.closest("[data-spell-slot-value]");
+    if (spellSlotButton) {
+      const levelKey = spellSlotButton.dataset.spellSlotLevel;
+      const control = dom.spellSections.querySelector(`[data-field="spellcasting.${levelKey}.slotsExpended"]`);
+      if (control) {
+        const selectedValue = Number(spellSlotButton.dataset.spellSlotValue);
+        const currentValue = Number(control.value) || 0;
+        control.value = String(currentValue >= selectedValue ? selectedValue - 1 : selectedValue);
+        handleSheetFieldInteraction(control, "change");
+      }
+      return;
+    }
+
+    const spellToggleButton = event.target.closest("[data-toggle-spell-level]");
+    if (spellToggleButton) {
+      const levelKey = spellToggleButton.dataset.toggleSpellLevel;
+      if (state.collapsedSpellLevels.has(levelKey)) {
+        state.collapsedSpellLevels.delete(levelKey);
+      } else {
+        state.collapsedSpellLevels.add(levelKey);
+      }
+      renderSpellSections();
+      return;
+    }
+
     const attackDeleteButton = event.target.closest("[data-delete-attack]");
     if (attackDeleteButton) {
       const rowId = attackDeleteButton.dataset.deleteAttack;
       const relativePath = `sheet/attacks/rows/${rowId}`;
+      const deletedRow = deepClone(getNestedValue(currentCharacter(), `sheet.attacks.rows.${rowId}`));
+      const characterId = state.selectedCharacterId;
       applyRelativeUpdate(state.selectedCharacterId, relativePath, null);
       renderAttacks();
-      commitWrite(state.selectedCharacterId, relativePath, null);
+      showUndoableNote(
+        "Attack removed.",
+        () => commitWrite(characterId, relativePath, null),
+        () => {
+          applyRelativeUpdate(characterId, relativePath, deletedRow);
+          renderAttacks();
+        }
+      );
       return;
     }
 
@@ -2468,9 +2724,18 @@ function bindEvents() {
     if (spellDeleteButton) {
       const [levelKey, rowId] = spellDeleteButton.dataset.deleteSpell.split(":");
       const relativePath = `sheet/spellcasting/${levelKey}/rows/${rowId}`;
+      const deletedRow = deepClone(getNestedValue(currentCharacter(), `sheet.spellcasting.${levelKey}.rows.${rowId}`));
+      const characterId = state.selectedCharacterId;
       applyRelativeUpdate(state.selectedCharacterId, relativePath, null);
       renderSpellSections();
-      commitWrite(state.selectedCharacterId, relativePath, null);
+      showUndoableNote(
+        "Spell removed.",
+        () => commitWrite(characterId, relativePath, null),
+        () => {
+          applyRelativeUpdate(characterId, relativePath, deletedRow);
+          renderSpellSections();
+        }
+      );
       return;
     }
 
@@ -2494,22 +2759,16 @@ function bindEvents() {
   });
 
   dom.diceButton.addEventListener("click", () => openModal("dice", dom.diceButton));
+  dom.undoActionButton.addEventListener("click", undoPendingAction);
   dom.diceCloseButton.addEventListener("click", closeModal);
   dom.settingsButton.addEventListener("click", () => openModal("settings", dom.settingsButton));
   dom.settingsCloseButton.addEventListener("click", closeModal);
   dom.rollButton.addEventListener("click", rollDice);
+  dom.clearDiceButton.addEventListener("click", clearDiceTray);
   dom.clearHistoryButton.addEventListener("click", () => {
     state.diceHistory = [];
     persistDiceState();
     renderDiceHistory();
-    renderDiceResult({
-      formula: "Choose your roll.",
-      results: [],
-      modifier: 0,
-      total: "-",
-      isNatural20: false,
-      isNatural1: false
-    });
   });
 
   dom.diceTypeGroup.addEventListener("click", (event) => {
@@ -2517,21 +2776,20 @@ function bindEvents() {
     if (!dieButton) {
       return;
     }
-    state.dicePrefs.die = dieButton.dataset.die;
-    persistDiceState();
-    renderDiceInputs();
+    addDieToTray(dieButton.dataset.die);
   });
 
-  dom.diceCount.addEventListener("change", () => {
-    state.dicePrefs.count = clampNumber(dom.diceCount.value, 1, 10, 1);
-    persistDiceState();
-    renderDiceInputs();
+  dom.diceTray.addEventListener("click", (event) => {
+    const dieButton = event.target.closest("[data-remove-die]");
+    if (dieButton) {
+      removeDieFromTray(dieButton.dataset.removeDie);
+    }
   });
 
-  dom.diceModifier.addEventListener("change", () => {
+  dom.diceModifier.addEventListener("input", () => {
     state.dicePrefs.modifier = clampNumber(dom.diceModifier.value, -99, 99, 0);
     persistDiceState();
-    renderDiceInputs();
+    renderDiceResult(currentDiceResult());
   });
 
   document.querySelectorAll("[data-close-modal]").forEach((element) => {
@@ -2595,11 +2853,11 @@ function initializeFirebase() {
 
   onAuthStateChanged(state.auth, (user) => {
     state.signInResolved = true;
-    state.currentUser = user;
+    state.currentUser = LOCAL_PREVIEW_MODE ? null : user;
     state.permissionDenied = false;
     state.lastWriteError = "";
 
-    if (user) {
+    if (user && !LOCAL_PREVIEW_MODE) {
       renderSheet();
       attachCharactersListener();
       flushQueuedWrites();
