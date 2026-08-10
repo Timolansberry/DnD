@@ -731,7 +731,7 @@ const state = {
   dicePrefs: {
     die: "d20",
     count: 1,
-    modifier: 0,
+    modifier: "",
     ...readLocalStorage(STORAGE_KEYS.dicePrefs, {})
   },
   diceTray: [],
@@ -1025,6 +1025,20 @@ function controlDesiredValue(control, character) {
   return getNestedValue(character.sheet, fieldPath);
 }
 
+function formatSignedManualValue(value) {
+  const trimmedValue = normalizeText(value ?? "", 8).trim();
+  if (trimmedValue === "") {
+    return "";
+  }
+
+  const numericValue = Number(trimmedValue);
+  if (!Number.isFinite(numericValue) || numericValue === 0) {
+    return "";
+  }
+
+  return numericValue > 0 ? `+${numericValue}` : String(numericValue);
+}
+
 function renderFieldControl(control, character) {
   const desiredValue = controlDesiredValue(control, character);
   const isFocused = document.activeElement === control;
@@ -1043,7 +1057,9 @@ function renderFieldControl(control, character) {
     return;
   }
 
-  control.value = desiredValue ?? "";
+  control.value = control.dataset.signedNumber
+    ? formatSignedManualValue(desiredValue)
+    : desiredValue ?? "";
 }
 
 function renderVitalControls(character) {
@@ -1415,6 +1431,11 @@ function currentDiceResult() {
   };
 }
 
+function parseOptionalDiceModifier(value) {
+  const trimmedValue = String(value ?? "").trim();
+  return trimmedValue === "" ? "" : clampNumber(trimmedValue, -99, 99, 0);
+}
+
 function renderDiceOptions() {
   dom.diceTypeGroup.textContent = "";
 
@@ -1480,7 +1501,8 @@ function renderDiceTray() {
 
 function renderDiceInputs() {
   ensureDiceTray();
-  dom.diceModifier.value = String(clampNumber(state.dicePrefs.modifier, -99, 99, 0));
+  const modifier = parseOptionalDiceModifier(state.dicePrefs.modifier);
+  dom.diceModifier.value = modifier === "" || modifier === 0 ? "" : String(modifier);
   renderDiceOptions();
   renderDiceTray();
   renderDiceResult(currentDiceResult());
@@ -1912,7 +1934,7 @@ function normalizeFieldValue(fieldPath, rawValue) {
   }
 
   if (fieldPath.startsWith("calculatedOverrides.")) {
-    return rawValue === null || rawValue === "" ? null : normalizeText(rawValue, 8).trim();
+    return rawValue === null || rawValue === "" ? "" : normalizeText(rawValue, 8).trim();
   }
 
   if (fieldPath.startsWith("identity.level")) {
@@ -1961,7 +1983,10 @@ function handleSheetFieldInteraction(control, mode) {
     return;
   }
 
-  const normalizedValue = normalizeFieldValue(fieldPath, parseControlValue(control));
+  const parsedValue = parseControlValue(control);
+  const normalizedValue = control.dataset.signedNumber && mode === "change"
+    ? formatSignedManualValue(parsedValue)
+    : normalizeFieldValue(fieldPath, parsedValue);
   const relativePath = relativePathFromFieldPath(fieldPath);
   const delay = control.type === "checkbox" || control.tagName === "SELECT" || mode === "change"
     ? 0
@@ -2203,7 +2228,7 @@ function resetLocalCache() {
   Object.values(STORAGE_KEYS).forEach((key) => removeLocalStorage(key));
   state.queuedWrites = {};
   state.diceHistory = [];
-  state.dicePrefs = { die: "d20", count: 0, modifier: 0, tray: [] };
+  state.dicePrefs = { die: "d20", count: 0, modifier: "", tray: [] };
   state.diceTray = [];
   state.diceTrayInitialized = true;
   state.localCampaignName = "Main Campaign";
@@ -2407,7 +2432,7 @@ function rollDice() {
     return;
   }
 
-  state.dicePrefs.modifier = clampNumber(dom.diceModifier.value, -99, 99, 0);
+  state.dicePrefs.modifier = parseOptionalDiceModifier(dom.diceModifier.value);
   state.diceTray = state.diceTray.map((die) => ({
     ...die,
     value: cryptoRoll(Number(die.die.slice(1)))
@@ -2656,7 +2681,18 @@ function bindEvents() {
 
   dom.sheetForm.addEventListener("focusout", (event) => {
     const control = event.target.closest("[data-field]");
-    if (control && state.pendingRemoteFields.has(control.dataset.field)) {
+    if (!control) {
+      return;
+    }
+
+    if (control.dataset.signedNumber) {
+      handleSheetFieldInteraction(control, "change");
+      state.pendingRemoteFields.delete(control.dataset.field);
+      renderAllFields();
+      return;
+    }
+
+    if (state.pendingRemoteFields.has(control.dataset.field)) {
       state.pendingRemoteFields.delete(control.dataset.field);
       renderAllFields();
     }
@@ -2787,7 +2823,7 @@ function bindEvents() {
   });
 
   dom.diceModifier.addEventListener("input", () => {
-    state.dicePrefs.modifier = clampNumber(dom.diceModifier.value, -99, 99, 0);
+    state.dicePrefs.modifier = parseOptionalDiceModifier(dom.diceModifier.value);
     persistDiceState();
     renderDiceResult(currentDiceResult());
   });

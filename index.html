@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Adventurers' Archive</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -87,7 +88,11 @@
           <strong id="user-label">Unknown</strong>
         </div>
         <button id="dice-button" class="btn btn-secondary" type="button" aria-haspopup="dialog" aria-controls="dice-modal">
-          Roll Dice
+          <svg class="dice-button-icon" viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M50 7 88 29v43L50 94 12 72V29Z"></path>
+            <path d="M12 29l38 22 38-22M50 51v43"></path>
+          </svg>
+          <span>Roll Dice</span>
         </button>
         <button id="settings-button" class="btn btn-secondary" type="button" aria-haspopup="dialog" aria-controls="settings-modal">
           Settings
