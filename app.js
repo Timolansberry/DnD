@@ -20,6 +20,7 @@ const DEFAULT_CHARACTER_NAMES = ["Rogue", "Character 2", "Character 3", "Charact
 const CHARACTER_IDS = ["character-1", "character-2", "character-3", "character-4", "character-5"];
 const PAGE_IDS = ["core", "details", "spellcasting"];
 const DICE_TYPES = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
+const DICE_ROLL_DURATION = 1220;
 const DICE_ICON_PATHS = {
   d4: ["M50 8 90 84H10Z", "M50 8v76M10 84l40-40 40 40"],
   d6: ["M50 7 88 29v43L50 94 12 72V29Z", "M12 29l38 22 38-22M50 51v43"],
@@ -608,7 +609,7 @@ function friendlyAuthError(error) {
     case "auth/invalid-credential":
     case "auth/wrong-password":
     case "auth/user-not-found":
-      return "That email and password combination was not recognized.";
+      return "That password was not recognized.";
     case "auth/too-many-requests":
       return "Too many sign-in attempts. Please wait a moment and try again.";
     case "auth/network-request-failed":
@@ -736,6 +737,7 @@ const state = {
   },
   diceTray: [],
   diceTrayInitialized: false,
+  isDiceRolling: false,
   editingTabId: null,
   initializingDefaults: false,
   isSyncingQueue: false,
@@ -1475,7 +1477,7 @@ function renderDiceTray() {
     return;
   }
 
-  state.diceTray.forEach((die) => {
+  state.diceTray.forEach((die, index) => {
     const button = createElement("button", {
       className: "dice-tray-item",
       type: "button",
@@ -1486,6 +1488,17 @@ function renderDiceTray() {
         "data-die-type": die.die
       }
     });
+    const rollX = ((index % 5) - 2) * 11;
+    const rollDirection = index % 2 === 0 ? 1 : -1;
+    button.style.setProperty("--roll-delay", `${Math.min(index, 7) * 42}ms`);
+    button.style.setProperty("--roll-x", `${rollX}px`);
+    button.style.setProperty("--roll-x-back", `${rollX * -0.35}px`);
+    button.style.setProperty("--roll-x-small", `${rollX * 0.35}px`);
+    button.style.setProperty("--roll-spin-65", `${65 * rollDirection}deg`);
+    button.style.setProperty("--roll-spin-190", `${190 * rollDirection}deg`);
+    button.style.setProperty("--roll-spin-285", `${285 * rollDirection}deg`);
+    button.style.setProperty("--roll-spin-332", `${332 * rollDirection}deg`);
+    button.style.setProperty("--roll-spin-360", `${360 * rollDirection}deg`);
     const face = createElement("span", { className: "dice-result-face" });
     face.append(
       createDiceIcon(die.die, "dice-result-icon"),
@@ -2389,13 +2402,53 @@ function renderDiceResult(result) {
 }
 
 function animateDiceStage() {
-  dom.diceResultCard.classList.remove("is-rolling");
+  dom.diceResultCard.classList.remove("is-tossing");
   void dom.diceResultCard.offsetWidth;
-  dom.diceResultCard.classList.add("is-rolling");
-  window.setTimeout(() => dom.diceResultCard.classList.remove("is-rolling"), 560);
+  dom.diceResultCard.classList.add("is-tossing");
+  window.setTimeout(() => dom.diceResultCard.classList.remove("is-tossing"), 560);
+}
+
+function setDiceRolling(isRolling) {
+  state.isDiceRolling = isRolling;
+  dom.diceResultCard.classList.toggle("is-rolling", isRolling);
+  dom.diceResultCard.setAttribute("aria-busy", String(isRolling));
+  dom.rollButton.disabled = isRolling;
+  dom.rollButton.textContent = isRolling ? "Rolling..." : "Roll All Dice";
+  dom.clearDiceButton.disabled = isRolling;
+  dom.diceModifier.disabled = isRolling;
+  dom.diceTypeGroup.querySelectorAll("button").forEach((button) => {
+    button.disabled = isRolling;
+  });
+  dom.diceTray.querySelectorAll("button").forEach((button) => {
+    button.disabled = isRolling;
+  });
+}
+
+function renderRollingFaces() {
+  dom.diceTray.querySelectorAll("[data-die-type]").forEach((dieButton) => {
+    const faceValue = dieButton.querySelector(".dice-face-value");
+    const sides = Number(dieButton.dataset.dieType.slice(1));
+    if (faceValue && Number.isFinite(sides)) {
+      faceValue.textContent = String(cryptoRoll(sides));
+    }
+  });
+}
+
+function finishDiceRoll(finalTray) {
+  state.diceTray = finalTray;
+  const result = currentDiceResult();
+  state.diceHistory = [{ ...result, rolledAt: Date.now() }, ...state.diceHistory].slice(0, 10);
+  persistDiceState();
+  renderDiceInputs();
+  renderDiceHistory();
+  setDiceRolling(false);
 }
 
 function addDieToTray(dieType) {
+  if (state.isDiceRolling) {
+    return;
+  }
+
   if (!DICE_TYPES.includes(dieType) || state.diceTray.length >= 20) {
     if (state.diceTray.length >= 20) {
       renderTransientNote("The dice tray can hold up to 20 dice.");
@@ -2415,34 +2468,60 @@ function addDieToTray(dieType) {
 }
 
 function removeDieFromTray(dieId) {
+  if (state.isDiceRolling) {
+    return;
+  }
+
   state.diceTray = state.diceTray.filter((die) => die.id !== dieId);
   persistDiceState();
   renderDiceInputs();
 }
 
 function clearDiceTray() {
+  if (state.isDiceRolling) {
+    return;
+  }
+
   state.diceTray = [];
   persistDiceState();
   renderDiceInputs();
 }
 
 function rollDice() {
+  if (state.isDiceRolling) {
+    return;
+  }
+
   if (!state.diceTray.length) {
     renderTransientNote("Add at least one die before rolling.");
     return;
   }
 
   state.dicePrefs.modifier = parseOptionalDiceModifier(dom.diceModifier.value);
-  state.diceTray = state.diceTray.map((die) => ({
+  const finalTray = state.diceTray.map((die) => ({
     ...die,
     value: cryptoRoll(Number(die.die.slice(1)))
   }));
-  const result = currentDiceResult();
-  state.diceHistory = [{ ...result, rolledAt: Date.now() }, ...state.diceHistory].slice(0, 10);
-  persistDiceState();
-  renderDiceInputs();
-  renderDiceHistory();
-  animateDiceStage();
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (prefersReducedMotion) {
+    finishDiceRoll(finalTray);
+    return;
+  }
+
+  setDiceRolling(true);
+  dom.diceResultCard.classList.remove("is-natural-20", "is-natural-1");
+  dom.diceFormula.textContent = `${diceFormula(state.diceTray, clampNumber(state.dicePrefs.modifier, -99, 99, 0))} in motion`;
+  dom.diceBreakdown.textContent = "Tumbling across the tray...";
+  dom.diceTotal.textContent = "...";
+  dom.diceLive.textContent = "Rolling dice.";
+  renderRollingFaces();
+
+  const faceCycle = window.setInterval(renderRollingFaces, 72);
+  window.setTimeout(() => {
+    window.clearInterval(faceCycle);
+    finishDiceRoll(finalTray);
+  }, DICE_ROLL_DURATION);
 }
 
 function buildAbilityCards() {

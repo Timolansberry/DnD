@@ -55,14 +55,15 @@ The browser attaches one real-time listener to `campaigns/main-campaign/characte
 
 ## Firebase Authentication Usage
 
-The login screen uses Firebase Authentication Email/Password sign-in only.
+The login screen uses Firebase Authentication Email/Password sign-in internally. The shared account email is stored as a public hidden form value, so visitors only enter the password.
 
 - Public self-registration is not exposed in the UI.
 - Anonymous authentication is not used.
+- The preset email address is an account identifier, not a secret.
 - Passwords are never stored in project files or localStorage.
 - Authentication persistence is handled by Firebase's normal browser behavior.
 
-The Firebase accounts for players should be created manually in Firebase Console.
+The shared Firebase account should be created manually in Firebase Console, and its UID should be the only UID allowed by the Realtime Database rules.
 
 ## Why Firebase Admin SDK Must Never Be Used In Browser Code
 
@@ -106,13 +107,13 @@ This project now tracks `firebase-config.js` on purpose so static hosts like Git
 4. Enable `Email/Password`.
 5. Save the change.
 
-## How To Create The Player Accounts Manually
+## How To Create The Shared Account Manually
 
 1. In Firebase Console, open `Authentication`.
 2. Go to the `Users` tab.
 3. Click `Add user`.
-4. Enter each player's email and password.
-5. Repeat for every player who should be allowed to sign in.
+4. Enter the preset email used in `index.html` and choose a strong password.
+5. Share only the password with trusted players.
 
 ## How To Find Each Account's UID
 

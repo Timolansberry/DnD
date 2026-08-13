@@ -43,13 +43,10 @@
       <p class="eyebrow">Character Sheets &amp; Dice</p>
       <h1>Adventurers' Archive</h1>
       <p class="screen-copy">
-        Sign in with an existing Email/Password account created in Firebase Authentication.
+        Enter the shared archive password to continue.
       </p>
       <form id="login-form" class="auth-form" novalidate>
-        <label class="field-block">
-          <span>Email</span>
-          <input id="email-input" name="email" type="email" autocomplete="username" required>
-        </label>
+        <input id="email-input" name="email" type="hidden" value="test@gmail.com" autocomplete="username">
         <label class="field-block">
           <span>Password</span>
           <input id="password-input" name="password" type="password" autocomplete="current-password" required>

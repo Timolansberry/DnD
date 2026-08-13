@@ -2633,6 +2633,21 @@ input[readonly] {
     repeating-linear-gradient(135deg, transparent 0 18px, rgba(148, 163, 184, 0.025) 19px 20px);
 }
 
+.dice-stage::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 38%;
+  left: -35%;
+  width: 32%;
+  height: 45%;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.3), transparent 68%);
+  filter: blur(12px);
+  opacity: 0;
+}
+
 .dice-stage-header,
 .dice-control-heading,
 .dice-action-row {
@@ -2698,6 +2713,8 @@ input[readonly] {
   align-content: center;
   gap: 0.8rem;
   min-height: 10.5rem;
+  perspective: 900px;
+  transform-style: preserve-3d;
 }
 
 .dice-tray-empty {
@@ -2814,18 +2831,61 @@ input[readonly] {
 }
 
 .dice-stage.is-rolling .dice-tray-item {
-  animation: dice-tumble 520ms cubic-bezier(0.25, 0.8, 0.25, 1) both;
+  pointer-events: none;
+  animation: dice-flight 880ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  animation-delay: var(--roll-delay, 0ms);
 }
 
-.dice-stage.is-rolling .dice-tray-item:nth-child(2n) {
-  animation-direction: reverse;
+.dice-stage.is-rolling .dice-result-face {
+  animation: dice-spin 360ms linear infinite;
 }
 
-@keyframes dice-tumble {
-  0% { transform: translateY(0) rotate(0deg) scale(1); }
-  35% { transform: translateY(-14px) rotate(9deg) scale(1.07); }
-  68% { transform: translateY(3px) rotate(-6deg) scale(0.97); }
-  100% { transform: translateY(0) rotate(0deg) scale(1); }
+.dice-stage.is-rolling .dice-face-value {
+  text-shadow: 0 1px rgba(255, 255, 255, 0.8), 0 0 12px rgba(255, 255, 255, 0.9);
+}
+
+.dice-stage.is-rolling .dice-total {
+  animation: dice-total-pulse 520ms ease-in-out infinite alternate;
+}
+
+.dice-stage.is-rolling::after {
+  animation: dice-stage-sweep 820ms ease-in-out infinite;
+}
+
+.dice-stage.is-tossing .dice-tray-item:last-child {
+  animation: dice-toss-in 540ms cubic-bezier(0.18, 0.82, 0.28, 1.25) both;
+}
+
+@keyframes dice-flight {
+  0% { transform: translate3d(0, 0, 0) rotateZ(0deg) scale(1); }
+  18% { transform: translate3d(var(--roll-x-back), -22px, 45px) rotateZ(var(--roll-spin-65)) scale(1.08); }
+  47% { transform: translate3d(var(--roll-x), -58px, 90px) rotateZ(var(--roll-spin-190)) scale(1.16); }
+  70% { transform: translate3d(var(--roll-x-small), 5px, 15px) rotateZ(var(--roll-spin-285)) scale(0.94); }
+  84% { transform: translate3d(0, -12px, 28px) rotateZ(var(--roll-spin-332)) scale(1.04); }
+  100% { transform: translate3d(0, 0, 0) rotateZ(var(--roll-spin-360)) scale(1); }
+}
+
+@keyframes dice-spin {
+  0% { transform: rotate3d(1, 1, 0, 0deg); filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.16)); }
+  50% { transform: rotate3d(1, 1, 0, 180deg); filter: drop-shadow(12px 18px 12px rgba(15, 23, 42, 0.22)); }
+  100% { transform: rotate3d(1, 1, 0, 360deg); filter: drop-shadow(0 8px 10px rgba(15, 23, 42, 0.16)); }
+}
+
+@keyframes dice-stage-sweep {
+  0% { left: -35%; opacity: 0; transform: scale(0.7); }
+  35% { opacity: 0.8; }
+  100% { left: 105%; opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes dice-total-pulse {
+  from { opacity: 0.38; transform: scale(0.92); }
+  to { opacity: 0.78; transform: scale(1.04); }
+}
+
+@keyframes dice-toss-in {
+  0% { opacity: 0; transform: translate3d(38px, -48px, 80px) rotate(135deg) scale(0.55); }
+  68% { opacity: 1; transform: translate3d(-4px, 5px, 0) rotate(-10deg) scale(1.08); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
 }
 
 .dice-control-deck {
@@ -3082,11 +3142,56 @@ input[readonly] {
     grid-template-columns: 1fr;
   }
 
+  .details-sheet-layout {
+    grid-template-areas:
+      "appearance"
+      "allies"
+      "backstory"
+      "treasure";
+  }
+
   .core-sidebar-column,
   .core-center-column,
   .core-right-column {
     grid-column: auto;
     grid-template-columns: 1fr;
+  }
+
+  .character-tablist {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .abilities-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .core-right-column {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .core-sidebar-column {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .core-saving-throws-section {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .core-skills-section {
+    grid-column: 2;
+    grid-row: 2 / 5;
+  }
+
+  .passive-perception-field {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .core-proficiencies-section {
+    grid-column: 1;
+    grid-row: 4;
   }
 
   .spell-columns-layout {
@@ -3133,6 +3238,10 @@ input[readonly] {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .combat-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .death-saves-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3174,13 +3283,16 @@ input[readonly] {
 
   .identity-grid,
   .details-grid,
-  .field-combo-inputs,
   .spell-overview-grid,
   .currency-grid,
   .spell-meta-grid,
   .details-stats-grid,
   .spell-banner-stats {
     grid-template-columns: 1fr;
+  }
+
+  .field-combo-inputs {
+    grid-template-columns: minmax(0, 1fr) 4rem;
   }
 
   .identity-grid,
@@ -3367,11 +3479,114 @@ input[readonly] {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
+  .site-header,
+  .workspace,
+  .screen-card {
+    width: min(94vw, 94vw);
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tab-strip-section,
+  .sheet-navigation-section,
+  .sheet-shell,
+  .sheet-shell-header,
+  .sheet-form,
+  .sheet-page {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .roster-section {
+    padding-inline: 0.6rem;
+  }
+
+  .roster-section .section-heading {
+    text-align: left;
+  }
+
   .character-tablist {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding: 0.08rem 0 0.42rem;
+    scroll-padding-inline: 0.1rem;
+    scroll-snap-type: inline mandatory;
+    scrollbar-width: none;
+  }
+
+  .character-tablist::-webkit-scrollbar {
+    display: none;
+  }
+
+  .character-card {
+    flex: 0 0 min(13rem, 78vw);
+    scroll-snap-align: start;
+  }
+
+  .character-tab {
+    min-height: 4.7rem;
+  }
+
+  .identity-grid,
+  .details-stats-grid,
+  .spell-banner-stats,
+  .spell-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .identity-grid .field-combo,
+  .identity-grid > :last-child,
+  .spell-banner-stats > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .currency-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .abilities-grid,
+  .core-sidebar-column,
+  .core-right-column,
+  .combat-bottom-grid {
     grid-template-columns: 1fr;
   }
 
+  .core-saving-throws-section,
+  .core-skills-section,
+  .passive-perception-field,
+  .core-proficiencies-section {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .details-appearance-section textarea,
+  .details-allies-section textarea {
+    min-height: 12rem;
+  }
+
+  .details-backstory-section textarea,
+  .details-treasure-main textarea {
+    min-height: 8rem;
+  }
+
+  .sheet-shell-header {
+    gap: 0.45rem;
+  }
+
+  .sheet-shell-meta {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 480px) {
   .header-controls .status-card {
     display: none;
   }
