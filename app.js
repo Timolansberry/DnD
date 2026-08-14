@@ -1034,8 +1034,12 @@ function formatSignedManualValue(value) {
   }
 
   const numericValue = Number(trimmedValue);
-  if (!Number.isFinite(numericValue) || numericValue === 0) {
+  if (!Number.isFinite(numericValue)) {
     return "";
+  }
+
+  if (numericValue === 0) {
+    return "+0";
   }
 
   return numericValue > 0 ? `+${numericValue}` : String(numericValue);
