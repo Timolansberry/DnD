@@ -1175,8 +1175,7 @@ function renderAttacks() {
         attributes: {
           "aria-label": `Damage and type for ${rowId}`,
           "data-field": `attacks.rows.${rowId}.damage`,
-          "data-attack-combined": rowId,
-          placeholder: "1d8 + 3 Piercing"
+          "data-attack-combined": rowId
         }
       })
     );
